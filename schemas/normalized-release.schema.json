@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://release-framework.dev/schemas/normalized-release.schema.json",
+  "title": "Normalized Release JSON v1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run",
+    "source",
+    "repository",
+    "git",
+    "profile",
+    "release",
+    "completion",
+    "artifacts",
+    "packages",
+    "pull_requests",
+    "notifications",
+    "links",
+    "extensions"
+  ],
+  "properties": {
+    "schema_version": { "const": "release-framework.release/v1" },
+    "run": {
+      "type": "object",
+      "required": ["id", "dry_run", "provider", "trigger"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "dry_run": { "type": "boolean" },
+        "provider": { "type": "string", "minLength": 1 },
+        "trigger": { "type": "string", "minLength": 1 }
+      }
+    },
+    "source": { "type": "object", "additionalProperties": true },
+    "repository": {
+      "type": "object",
+      "required": ["owner", "name", "full_name", "url"],
+      "additionalProperties": true,
+      "properties": {
+        "owner": { "type": "string" },
+        "name": { "type": "string" },
+        "full_name": { "type": "string" },
+        "url": { "type": "string" }
+      }
+    },
+    "git": {
+      "type": "object",
+      "required": ["ref", "ref_name", "ref_type", "sha", "short_sha", "stable_branch"],
+      "additionalProperties": true,
+      "properties": {
+        "ref": { "type": "string" },
+        "ref_name": { "type": "string" },
+        "ref_type": { "type": "string" },
+        "sha": { "type": "string" },
+        "short_sha": { "type": "string" },
+        "stable_branch": { "type": "boolean" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "required": ["name", "release_mode", "completion_gate", "release_record_timing"],
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "release_mode": { "type": "string", "enum": ["framework-managed", "tool-observe", "tool-wrap"] },
+        "completion_gate": { "type": "string" },
+        "release_record_timing": { "type": "string", "enum": ["after_completion", "at_completion", "before_artifacts"] }
+      }
+    },
+    "release": {
+      "type": "object",
+      "required": ["version", "tag", "name", "body", "prerelease", "target_sha", "record"],
+      "additionalProperties": true,
+      "properties": {
+        "version": { "type": "string" },
+        "tag": { "type": "string" },
+        "name": { "type": "string" },
+        "body": { "type": "string" },
+        "prerelease": { "type": "boolean" },
+        "target_sha": { "type": "string" },
+        "record": {
+          "type": "object",
+          "required": ["system", "owner", "status", "idempotency_key"],
+          "additionalProperties": true,
+          "properties": {
+            "system": { "type": "string" },
+            "owner": { "type": "string", "enum": ["core", "tool", "external"] },
+            "status": { "type": "string" },
+            "idempotency_key": { "type": "string" }
+          }
+        }
+      }
+    },
+    "completion": {
+      "type": "object",
+      "required": ["status", "evidence"],
+      "additionalProperties": true,
+      "properties": {
+        "status": { "type": "string", "enum": ["pending", "completed", "failed", "unknown"] },
+        "evidence": { "type": "array" }
+      }
+    },
+    "artifacts": { "type": "array" },
+    "packages": { "type": "array" },
+    "pull_requests": { "type": "array" },
+    "notifications": {
+      "type": "object",
+      "required": ["targets", "deliveries"],
+      "additionalProperties": true,
+      "properties": {
+        "targets": { "type": "array" },
+        "deliveries": { "type": "array" }
+      }
+    },
+    "links": { "type": "object", "additionalProperties": true },
+    "extensions": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": true
+}

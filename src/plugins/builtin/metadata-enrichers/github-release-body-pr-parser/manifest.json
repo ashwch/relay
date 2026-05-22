@@ -1,0 +1,19 @@
+{
+  "api_version": "release-framework.plugin/v1",
+  "name": "builtin:github-release-body-pr-parser",
+  "type": "metadata_enricher",
+  "plugin_version": "1.0.0",
+  "plugin_api_version": 1,
+  "framework_version_range": "^0.1.0",
+  "entrypoint": { "kind": "builtin", "handler": "metadata_enrichers.github_release_body_pr_parser" },
+  "capabilities": ["enrich"],
+  "supported_release_modes": ["framework-managed", "tool-observe", "tool-wrap"],
+  "config_schema": null,
+  "required_inputs": [],
+  "required_secrets": [],
+  "optional_secrets": [],
+  "permissions": {},
+  "supports": { "dry_run": true, "local": true },
+  "outputs": ["release-body-pr-metadata"],
+  "trust": { "level": "builtin", "allow_in_ci": true }
+}

@@ -1,0 +1,53 @@
+{
+  "api_version": "release-framework.plugin/v1",
+  "name": "builtin:github-actions",
+  "type": "provider",
+  "plugin_version": "1.0.0",
+  "plugin_api_version": 1,
+  "framework_version_range": "^0.1.0",
+  "entrypoint": {
+    "kind": "builtin",
+    "handler": "providers.github_actions"
+  },
+  "capabilities": ["normalize"],
+  "supported_release_modes": ["framework-managed", "tool-observe", "tool-wrap"],
+  "config_schema": null,
+  "required_inputs": ["repository", "sha", "ref"],
+  "required_secrets": [],
+  "optional_secrets": [],
+  "permissions": {
+    "github": {
+      "contents": "read",
+      "pull_requests": "read",
+      "actions": "read"
+    },
+    "id_token": false,
+    "network": [],
+    "filesystem": {
+      "read": ["$GITHUB_EVENT_PATH"],
+      "write": []
+    },
+    "env": {
+      "allow": [
+        "GITHUB_REPOSITORY",
+        "GITHUB_SHA",
+        "GITHUB_REF",
+        "GITHUB_REF_NAME",
+        "GITHUB_EVENT_NAME",
+        "GITHUB_EVENT_PATH",
+        "GITHUB_RUN_ID",
+        "GITHUB_RUN_ATTEMPT",
+        "GITHUB_ACTOR"
+      ]
+    }
+  },
+  "supports": {
+    "dry_run": true,
+    "local": true
+  },
+  "outputs": ["normalized-release-json"],
+  "trust": {
+    "level": "builtin",
+    "allow_in_ci": true
+  }
+}

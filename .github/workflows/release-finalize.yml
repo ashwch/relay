@@ -1,0 +1,77 @@
+name: Release Finalize
+
+# Reusable workflow surface.
+#
+# Why this exists:
+# - most GitHub consumers should not copy YAML release logic into each repo
+# - the workflow keeps repo setup small and points everything back at one shared action
+# - the shared action then points back at one shared core finalize flow
+
+on:
+  workflow_call:
+    inputs:
+      config_path:
+        type: string
+        required: false
+        default: .github/release-framework.yml
+      release_ref:
+        type: string
+        required: false
+      release_profile:
+        type: string
+        required: false
+      provider_plugin:
+        type: string
+        required: false
+        default: builtin:github-actions
+      metadata_path:
+        type: string
+        required: false
+      dry_run:
+        type: boolean
+        required: false
+        default: false
+    outputs:
+      release_tag:
+        value: ${{ jobs.finalize.outputs.release_tag }}
+      release_url:
+        value: ${{ jobs.finalize.outputs.release_url }}
+      release_mode:
+        value: ${{ jobs.finalize.outputs.release_mode }}
+      profile:
+        value: ${{ jobs.finalize.outputs.profile }}
+      notification_sent:
+        value: ${{ jobs.finalize.outputs.notification_sent }}
+      result_json:
+        value: ${{ jobs.finalize.outputs.result_json }}
+
+permissions:
+  contents: write
+  pull-requests: read
+  actions: read
+
+jobs:
+  finalize:
+    # This job should stay intentionally thin.
+    # Checkout the caller repo, then delegate the real work to the shared action.
+    runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.finalize.outputs.release_tag }}
+      release_url: ${{ steps.finalize.outputs.release_url }}
+      release_mode: ${{ steps.finalize.outputs.release_mode }}
+      profile: ${{ steps.finalize.outputs.profile }}
+      notification_sent: ${{ steps.finalize.outputs.notification_sent }}
+      result_json: ${{ steps.finalize.outputs.result_json }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: finalize
+        uses: DiversioTeam/release-framework/actions/release-finalize@v1
+        with:
+          config_path: ${{ inputs.config_path }}
+          release_ref: ${{ inputs.release_ref }}
+          release_profile: ${{ inputs.release_profile }}
+          provider_plugin: ${{ inputs.provider_plugin }}
+          metadata_path: ${{ inputs.metadata_path }}
+          dry_run: ${{ inputs.dry_run }}

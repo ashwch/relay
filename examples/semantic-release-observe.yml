@@ -1,0 +1,48 @@
+# Example: semantic-release owns the tag and GitHub Release.
+#
+# Use this when semantic-release has already created the durable release record.
+# release-framework observes that record, verifies the tag target, and then runs
+# shared enrichment/notification behavior without creating a duplicate release.
+api_version: 1
+product_name: Example Component Library
+release_profile: semantic-release
+release_mode: tool-observe
+provider_plugin: builtin:circleci
+profile_plugin: builtin:semantic-release
+tool_plugin: builtin:semantic-release
+
+artifact_publishers:
+  - plugin: builtin:npm-registry-verify
+
+notifiers:
+  - plugin: builtin:slack-webhook
+
+metadata_enrichers:
+  - plugin: builtin:github-associated-prs
+  - plugin: builtin:github-release-body-pr-parser
+
+plugin_allowlist: []
+allow_local_plugins: false
+stable_branches:
+  - master
+
+version_source:
+  type: explicit
+  # In real use, keep this value aligned with the upstream release tool output.
+  # Many repos pass the final tag through --tag / RELEASE_TAG instead.
+  value: 1.2.3
+
+tag_template: v{version}
+
+notes_source:
+  type: semantic-release
+
+package:
+  name: '@example/component-library'
+  registry_url: https://registry.npmjs.org
+
+slack:
+  enabled: true
+  webhook_secret: SLACK_WEBHOOK_URL
+
+plugin_config: {}

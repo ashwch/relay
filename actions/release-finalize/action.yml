@@ -1,0 +1,79 @@
+name: release-finalize
+description: Thin GitHub Action wrapper around the release-framework CLI
+#
+# Why this is a composite action right now:
+# - we want one shared codepath during early framework development
+# - we do not want copied shell logic in every consumer repo
+# - we do not want a misleading "pretend bundled" action while the contract is still moving
+inputs:
+  config_path:
+    description: Path to .github/release-framework.yml
+    required: false
+    default: .github/release-framework.yml
+  release_ref:
+    description: Override commit or tag ref
+    required: false
+  release_profile:
+    description: Override stable release profile name
+    required: false
+  provider_plugin:
+    description: Override provider plugin ref
+    required: false
+    default: builtin:github-actions
+  metadata_path:
+    description: Optional JSON metadata merge patch path
+    required: false
+  dry_run:
+    description: Suppress side effects
+    required: false
+    default: 'false'
+  output_json:
+    description: Path to persist result JSON
+    required: false
+    default: .release-framework/result.json
+outputs:
+  release_tag:
+    description: Final release tag
+    value: ${{ steps.finalize.outputs.release_tag }}
+  release_url:
+    description: Final release URL
+    value: ${{ steps.finalize.outputs.release_url }}
+  release_mode:
+    description: Resolved release mode
+    value: ${{ steps.finalize.outputs.release_mode }}
+  profile:
+    description: Resolved profile name
+    value: ${{ steps.finalize.outputs.profile }}
+  notification_sent:
+    description: Whether a notification was delivered
+    value: ${{ steps.finalize.outputs.notification_sent }}
+  result_json:
+    description: Full machine-readable result JSON
+    value: ${{ steps.finalize.outputs.result_json }}
+runs:
+  using: composite
+  steps:
+    # The action bootstraps itself so callers only need to "use" it.
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+    # Install framework dependencies inside the framework repo checkout.
+    - shell: bash
+      run: npm ci
+      working-directory: ${{ github.action_path }}/../..
+    # Build from TypeScript source so the action and CLI stay in sync.
+    - shell: bash
+      run: npm run build
+      working-directory: ${{ github.action_path }}/../..
+    # Run the same JS entrypoint that wraps the shared core finalize flow.
+    - id: finalize
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/../../dist/actions/release-finalize.js"
+      env:
+        INPUT_CONFIG_PATH: ${{ inputs.config_path }}
+        INPUT_RELEASE_REF: ${{ inputs.release_ref }}
+        INPUT_RELEASE_PROFILE: ${{ inputs.release_profile }}
+        INPUT_PROVIDER_PLUGIN: ${{ inputs.provider_plugin }}
+        INPUT_METADATA_PATH: ${{ inputs.metadata_path }}
+        INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        INPUT_OUTPUT_JSON: ${{ inputs.output_json }}

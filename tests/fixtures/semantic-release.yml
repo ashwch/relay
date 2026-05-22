@@ -1,0 +1,25 @@
+# semantic-release observe-mode fixture.
+#
+# This models a repo where another tool already owns tag + GitHub Release
+# creation, and the framework must observe rather than duplicate that work.
+api_version: 1
+product_name: Component Library
+release_profile: semantic-release
+release_mode: tool-observe
+provider_plugin: builtin:circleci
+profile_plugin: builtin:semantic-release
+tool_plugin: builtin:semantic-release
+artifact_publishers: []
+notifiers:
+  - plugin: builtin:slack-webhook
+metadata_enrichers: []
+plugin_allowlist: []
+allow_local_plugins: false
+stable_branches:
+  - master
+version_source:
+  type: date-sha
+tag_template: v{date}-{short_sha}
+notes_source:
+  type: semantic-release
+plugin_config: {}

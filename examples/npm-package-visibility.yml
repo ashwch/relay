@@ -1,0 +1,45 @@
+# Example: verify that an npm package is visible before final notification.
+#
+# Use this for package repos where the package publish happens before
+# release-framework finalize. The framework verifies registry visibility and then
+# continues with metadata/notification phases.
+api_version: 1
+product_name: Example Component Library
+release_profile: npm-package
+release_mode: framework-managed
+provider_plugin: builtin:github-actions
+profile_plugin: builtin:npm-package
+tool_plugin: null
+
+artifact_publishers:
+  - plugin: builtin:npm-registry-verify
+
+notifiers:
+  - plugin: builtin:slack-webhook
+
+metadata_enrichers:
+  - plugin: builtin:github-associated-prs
+  - plugin: builtin:github-release-body-pr-parser
+
+plugin_allowlist: []
+allow_local_plugins: false
+stable_branches:
+  - main
+
+version_source:
+  type: date-sha
+
+tag_template: v{version}
+
+notes_source:
+  type: associated-release-pr
+
+package:
+  name: '@example/component-library'
+  registry_url: https://registry.npmjs.org
+
+slack:
+  enabled: true
+  webhook_secret: SLACK_WEBHOOK_URL
+
+plugin_config: {}

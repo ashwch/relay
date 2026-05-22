@@ -1,0 +1,44 @@
+# Example: enrich a deploy release with pull request context.
+#
+# Use this when the release record is the durable source of truth, but Slack and
+# downstream tools should also see related pull requests in normalized release
+# JSON.
+api_version: 1
+product_name: Example Service
+release_profile: deploy-release
+release_mode: framework-managed
+provider_plugin: builtin:github-actions
+profile_plugin: builtin:deploy-release
+tool_plugin: null
+
+artifact_publishers: []
+
+notifiers:
+  - plugin: builtin:slack-webhook
+
+metadata_enrichers:
+  - plugin: builtin:github-associated-prs
+  - plugin: builtin:github-release-body-pr-parser
+
+plugin_allowlist: []
+allow_local_plugins: false
+stable_branches:
+  - main
+
+version_source:
+  type: backend-date-release
+  counter_source: github-tag
+  separator: .
+
+tag_template: release-{version}
+
+notes_source:
+  type: associated-release-pr
+
+slack:
+  enabled: true
+  webhook_secret: SLACK_WEBHOOK_URL
+
+plugin_config:
+  builtin:slack-webhook:
+    include_rollout_prompt: true

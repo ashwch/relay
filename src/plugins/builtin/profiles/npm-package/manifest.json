@@ -1,0 +1,19 @@
+{
+  "api_version": "release-framework.plugin/v1",
+  "name": "builtin:npm-package",
+  "type": "profile",
+  "plugin_version": "1.0.0",
+  "plugin_api_version": 1,
+  "framework_version_range": "^0.1.0",
+  "entrypoint": { "kind": "builtin", "handler": "profiles.npm_package" },
+  "capabilities": ["plan"],
+  "supported_release_modes": ["framework-managed", "tool-observe"],
+  "config_schema": null,
+  "required_inputs": [],
+  "required_secrets": [],
+  "optional_secrets": [],
+  "permissions": {},
+  "supports": { "dry_run": true, "local": true },
+  "outputs": ["profile-plan"],
+  "trust": { "level": "builtin", "allow_in_ci": true }
+}

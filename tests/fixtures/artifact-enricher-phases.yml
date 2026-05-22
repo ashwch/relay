@@ -1,0 +1,24 @@
+# Fixture that makes artifact and metadata phase ordering observable in tests.
+api_version: 1
+product_name: Example Web App
+release_profile: deploy-release
+release_mode: framework-managed
+provider_plugin: builtin:generic-env
+profile_plugin: builtin:deploy-release
+tool_plugin: null
+artifact_publishers:
+  - plugin: builtin:github-release-assets
+  - plugin: builtin:npm-registry-verify
+notifiers: []
+metadata_enrichers:
+  - plugin: builtin:github-release-body-pr-parser
+plugin_allowlist: []
+allow_local_plugins: false
+stable_branches:
+  - main
+version_source:
+  type: date-sha
+tag_template: production-{date}-{short_sha}
+notes_source:
+  type: associated-release-pr
+plugin_config: {}

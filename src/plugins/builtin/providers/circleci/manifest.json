@@ -1,0 +1,48 @@
+{
+  "api_version": "release-framework.plugin/v1",
+  "name": "builtin:circleci",
+  "type": "provider",
+  "plugin_version": "1.0.0",
+  "plugin_api_version": 1,
+  "framework_version_range": "^0.1.0",
+  "entrypoint": {
+    "kind": "builtin",
+    "handler": "providers.circleci"
+  },
+  "capabilities": ["normalize"],
+  "supported_release_modes": ["framework-managed", "tool-observe", "tool-wrap"],
+  "config_schema": null,
+  "required_inputs": ["repository", "sha"],
+  "required_secrets": [],
+  "optional_secrets": [],
+  "permissions": {
+    "github": {},
+    "id_token": false,
+    "network": [],
+    "filesystem": {
+      "read": [],
+      "write": []
+    },
+    "env": {
+      "allow": [
+        "CIRCLE_PROJECT_USERNAME",
+        "CIRCLE_PROJECT_REPONAME",
+        "CIRCLE_SHA1",
+        "CIRCLE_BRANCH",
+        "CIRCLE_TAG",
+        "CIRCLE_BUILD_URL",
+        "CIRCLE_BUILD_NUM",
+        "CIRCLE_WORKFLOW_ID"
+      ]
+    }
+  },
+  "supports": {
+    "dry_run": true,
+    "local": true
+  },
+  "outputs": ["normalized-release-json"],
+  "trust": {
+    "level": "builtin",
+    "allow_in_ci": true
+  }
+}

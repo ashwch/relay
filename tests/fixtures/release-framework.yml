@@ -1,0 +1,30 @@
+# Baseline framework-managed app release fixture.
+#
+# We use this fixture in tests to model a common "deploy finished, now finalize"
+# application repo. It stays intentionally small so failures are easy to read.
+api_version: 1
+product_name: Example Web App
+release_profile: deploy-release
+release_mode: framework-managed
+provider_plugin: builtin:generic-env
+profile_plugin: builtin:deploy-release
+tool_plugin: null
+artifact_publishers: []
+notifiers:
+  - plugin: builtin:slack-webhook
+metadata_enrichers: []
+plugin_allowlist: []
+allow_local_plugins: false
+stable_branches:
+  - main
+version_source:
+  type: date-sha
+tag_template: production-{date}-{short_sha}
+notes_source:
+  type: associated-release-pr
+slack:
+  enabled: true
+  webhook_secret: SLACK_WEBHOOK_URL
+plugin_config:
+  builtin:slack-webhook:
+    include_rollout_prompt: true

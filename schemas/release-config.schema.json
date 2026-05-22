@@ -1,0 +1,489 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://release-framework.dev/schemas/release-config.schema.json",
+  "title": "Release Framework Config v1",
+  "description": "Repository-level configuration for release-framework. This file chooses how a project defines release completion, versioning, tags, and shared plugin behavior.",
+  "examples": [
+    {
+      "api_version": 1,
+      "product_name": "Example Web App",
+      "release_profile": "deploy-release",
+      "release_mode": "framework-managed",
+      "provider_plugin": "builtin:github-actions",
+      "profile_plugin": "builtin:deploy-release",
+      "tool_plugin": null,
+      "artifact_publishers": [],
+      "notifiers": [
+        {
+          "plugin": "builtin:slack-webhook"
+        }
+      ],
+      "metadata_enrichers": [],
+      "plugin_allowlist": [],
+      "allow_local_plugins": false,
+      "stable_branches": ["main"],
+      "version_source": {
+        "type": "date-sha"
+      },
+      "tag_template": "release-{version}",
+      "notes_source": {
+        "type": "static"
+      },
+      "slack": {
+        "enabled": true,
+        "webhook_secret": "SLACK_WEBHOOK_URL"
+      },
+      "plugin_config": {}
+    },
+    {
+      "api_version": 1,
+      "product_name": "Example Backend",
+      "release_profile": "deploy-release",
+      "release_mode": "framework-managed",
+      "provider_plugin": "builtin:github-actions",
+      "profile_plugin": "builtin:deploy-release",
+      "tool_plugin": null,
+      "artifact_publishers": [],
+      "notifiers": [],
+      "metadata_enrichers": [],
+      "plugin_allowlist": [],
+      "allow_local_plugins": false,
+      "stable_branches": ["main"],
+      "version_source": {
+        "type": "backend-date-release",
+        "counter_source": "github-tag",
+        "separator": "."
+      },
+      "tag_template": "release-{version}",
+      "notes_source": {
+        "type": "static"
+      },
+      "plugin_config": {}
+    }
+  ],
+  "type": "object",
+  "required": [
+    "api_version",
+    "product_name",
+    "release_profile",
+    "release_mode",
+    "provider_plugin",
+    "profile_plugin",
+    "stable_branches",
+    "version_source",
+    "tag_template",
+    "notes_source"
+  ],
+  "properties": {
+    "api_version": {
+      "const": 1,
+      "description": "Configuration schema major."
+    },
+    "product_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable product or repository name used in release titles and notifications."
+    },
+    "release_profile": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable business-level profile name such as deploy-release, semantic-release, or asset-release."
+    },
+    "release_mode": {
+      "type": "string",
+      "enum": ["framework-managed", "tool-observe", "tool-wrap"],
+      "description": "Who owns the durable release record: core, an external tool, or a future wrapped tool execution path."
+    },
+    "provider_plugin": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Default provider plugin ref, usually a built-in such as builtin:github-actions or builtin:circleci."
+    },
+    "profile_plugin": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Concrete profile plugin implementation for the selected release profile."
+    },
+    "tool_plugin": {
+      "type": ["string", "null"],
+      "description": "Optional release-tool plugin ref for tool-observe or tool-wrap flows."
+    },
+    "artifact_publishers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/pluginSelection" },
+      "default": [],
+      "description": "Ordered artifact publisher or verifier plugins."
+    },
+    "notifiers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/pluginSelection" },
+      "default": [],
+      "description": "Ordered notifier plugins."
+    },
+    "metadata_enrichers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/pluginSelection" },
+      "default": [],
+      "description": "Ordered metadata enrichers that add optional release context."
+    },
+    "plugin_allowlist": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Exact npm: or path: plugin refs allowed for this repository."
+    },
+    "allow_local_plugins": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether allowlisted path: plugins may load in local or CI contexts."
+    },
+    "stable_branches": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Branch names that should be treated as stable releases instead of prereleases."
+    },
+    "version_source": {
+      "description": "How this project derives its release version string. Different projects can choose different schemas here.",
+      "oneOf": [
+        { "$ref": "#/$defs/versionSourceDate" },
+        { "$ref": "#/$defs/versionSourceDateSha" },
+        { "$ref": "#/$defs/versionSourceDateTime" },
+        { "$ref": "#/$defs/versionSourceDateCounter" },
+        { "$ref": "#/$defs/versionSourceBackendDateRelease" },
+        { "$ref": "#/$defs/versionSourceTemplate" },
+        { "$ref": "#/$defs/versionSourceExplicit" }
+      ]
+    },
+    "tag_template": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Final release tag template. Supported placeholders include {version}, {date}, {counter}, {short_sha}, {sha}, {branch}, and {time}. Prefer {version} when possible. Counter-based schemas should expose either {version} or {counter} so same-day releases stay distinguishable.",
+      "examples": [
+        "release-{version}",
+        "production-{date}-{short_sha}",
+        "backend-{date}.{counter}",
+        "nightly-{date}.{time}-{short_sha}"
+      ]
+    },
+    "notes_source": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true,
+      "description": "How release notes should be sourced."
+    },
+    "assets": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "slack": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "webhook_secret": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true,
+      "description": "First-party convenience block for Slack webhook notifier settings."
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "plugin_config": {
+      "type": "object",
+      "additionalProperties": true,
+      "default": {},
+      "description": "Plugin-specific configuration keyed by plugin ref."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "pluginSelection": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "required": ["plugin"],
+          "properties": {
+            "plugin": { "type": "string", "minLength": 1 },
+            "options": { "type": "object", "additionalProperties": true }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "counterSource": {
+      "type": "string",
+      "enum": ["github-tag", "explicit"],
+      "description": "How a same-day release counter should be resolved."
+    },
+    "versionSourceDate": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "const": "date"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Plain date versioning, such as 2026.05.22.",
+      "examples": [
+        {
+          "type": "date"
+        }
+      ]
+    },
+    "versionSourceDateSha": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "const": "date-sha"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Date plus short SHA versioning, such as 2026.05.22-9f3c1d2.",
+      "examples": [
+        {
+          "type": "date-sha"
+        }
+      ]
+    },
+    "versionSourceDateTime": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "const": "date-time"
+        },
+        "separator": {
+          "type": "string",
+          "minLength": 1,
+          "default": "."
+        },
+        "time_precision": {
+          "type": "string",
+          "enum": ["minutes", "seconds"],
+          "default": "seconds"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Date plus UTC time versioning, useful when more than one release can happen in a day and time-based uniqueness is acceptable.",
+      "examples": [
+        {
+          "type": "date-time",
+          "separator": ".",
+          "time_precision": "seconds"
+        }
+      ]
+    },
+    "versionSourceDateCounter": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "const": "date-counter"
+        },
+        "counter_source": {
+          "$ref": "#/$defs/counterSource",
+          "default": "github-tag"
+        },
+        "counter": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "counter_start": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "padding": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "separator": {
+          "type": "string",
+          "minLength": 1,
+          "default": "."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "counter_source": { "const": "explicit" }
+            }
+          },
+          "then": {
+            "required": ["counter"]
+          }
+        }
+      ],
+      "additionalProperties": false,
+      "description": "Date plus explicit daily release number, such as 2026.05.22.2.",
+      "examples": [
+        {
+          "type": "date-counter",
+          "counter_source": "github-tag",
+          "separator": "."
+        },
+        {
+          "type": "date-counter",
+          "counter_source": "explicit",
+          "counter": 2,
+          "separator": "."
+        }
+      ]
+    },
+    "versionSourceBackendDateRelease": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "enum": ["backend-date-release", "date-release"]
+        },
+        "counter_source": {
+          "$ref": "#/$defs/counterSource",
+          "default": "github-tag"
+        },
+        "counter": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "counter_start": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "padding": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "separator": {
+          "type": "string",
+          "minLength": 1,
+          "default": "."
+        },
+        "omit_counter_for_first": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "counter_source": { "const": "explicit" }
+            }
+          },
+          "then": {
+            "required": ["counter"]
+          }
+        }
+      ],
+      "additionalProperties": false,
+      "description": "Backend-style date releases where the first release of a day is plain date and later same-day releases add a counter suffix.",
+      "examples": [
+        {
+          "type": "backend-date-release",
+          "counter_source": "github-tag",
+          "separator": "."
+        },
+        {
+          "type": "backend-date-release",
+          "counter_source": "explicit",
+          "counter": 3,
+          "separator": "."
+        }
+      ]
+    },
+    "versionSourceTemplate": {
+      "type": "object",
+      "required": ["type", "template"],
+      "properties": {
+        "type": {
+          "const": "template"
+        },
+        "template": {
+          "type": "string",
+          "minLength": 1,
+          "not": {
+            "pattern": "\\{version\\}"
+          },
+          "description": "Custom version template using concrete fields such as {date}, {counter}, {short_sha}, {sha}, {branch}, or {time}."
+        },
+        "counter_source": {
+          "$ref": "#/$defs/counterSource",
+          "default": "github-tag"
+        },
+        "counter": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "counter_start": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        },
+        "padding": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "counter_source": { "const": "explicit" }
+            }
+          },
+          "then": {
+            "required": ["counter"]
+          }
+        }
+      ],
+      "additionalProperties": false,
+      "description": "Custom project-specific schema without adding a new framework codepath.",
+      "examples": [
+        {
+          "type": "template",
+          "template": "{date}.{counter}-{short_sha}",
+          "counter_source": "explicit",
+          "counter": 4
+        }
+      ]
+    },
+    "versionSourceExplicit": {
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": {
+          "const": "explicit"
+        },
+        "value": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "description": "Explicit version value provided by an upstream system or manual process.",
+      "examples": [
+        {
+          "type": "explicit",
+          "value": "2026.05.22.7"
+        }
+      ]
+    }
+  }
+}

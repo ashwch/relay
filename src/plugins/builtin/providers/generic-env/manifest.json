@@ -1,0 +1,48 @@
+{
+  "api_version": "release-framework.plugin/v1",
+  "name": "builtin:generic-env",
+  "type": "provider",
+  "plugin_version": "1.0.0",
+  "plugin_api_version": 1,
+  "framework_version_range": "^0.1.0",
+  "entrypoint": {
+    "kind": "builtin",
+    "handler": "providers.generic_env"
+  },
+  "capabilities": ["normalize"],
+  "supported_release_modes": ["framework-managed", "tool-observe", "tool-wrap"],
+  "config_schema": null,
+  "required_inputs": ["repo", "sha"],
+  "required_secrets": [],
+  "optional_secrets": [],
+  "permissions": {
+    "github": {},
+    "id_token": false,
+    "network": [],
+    "filesystem": {
+      "read": [],
+      "write": []
+    },
+    "env": {
+      "allow": [
+        "RELEASE_REPOSITORY",
+        "RELEASE_SHA",
+        "RELEASE_REF",
+        "RELEASE_REF_NAME",
+        "RELEASE_BRANCH",
+        "RELEASE_TAG",
+        "RELEASE_WORKFLOW_URL",
+        "RELEASE_COMPLETION_STATUS"
+      ]
+    }
+  },
+  "supports": {
+    "dry_run": true,
+    "local": true
+  },
+  "outputs": ["normalized-release-json"],
+  "trust": {
+    "level": "builtin",
+    "allow_in_ci": true
+  }
+}
