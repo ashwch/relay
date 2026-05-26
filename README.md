@@ -7,30 +7,32 @@ one system (CI, a release tool, a manual flow) and carries it through the
 final mile — GitHub Releases, notifications, metadata enrichment — without
 caring how each repo reached ship-ready.
 
-```text
-incoming release state from any source
-               ↓
-           Relay
-               ↓
-GitHub Release + notifications + shared metadata
-```
-
 The name matches the architecture: the framework is a baton pass, not a source
 of truth. CI and release tools still own their domains. Relay only owns the
 standardized last mile.
 
-The main idea is simple:
-
-```text
-whatever CI already does well
-        ↓
- build / deploy / publish / semantic-release
-        ↓
- normalize the result into one release document
-        ↓
- run one shared finalize flow
-        ↓
- GitHub Release + shared notifications + shared metadata
+```mermaid
+flowchart LR
+    subgraph Inputs["Any CI / Release Source"]
+        GH[GitHub Actions]
+        CC[CircleCI]
+        GE[generic-env]
+        SR[semantic-release]
+    end
+    subgraph Relay["Relay"]
+        direction TB
+        N[normalize] --> P[plan]
+        P --> RR[release-record]
+        RR --> AP[artifact-phase]
+        AP --> E[enrich]
+        E --> NF[notify]
+    end
+    subgraph Outputs["Shared Last Mile"]
+        GHR[GitHub Release]
+        SL[Slack]
+        MD[metadata]
+    end
+    Inputs --> Relay --> Outputs
 ```
 
 ## Why this repo exists
@@ -310,12 +312,16 @@ and core should pass it explicitly
 An external plugin does not need to import framework internals.
 It only needs to honor one JSON contract.
 
-```text
-read PluginRequest JSON from stdin
-        ↓
-do plugin-specific work
-        ↓
-write PluginResponse JSON to stdout
+```mermaid
+sequenceDiagram
+    participant Core as Relay Core
+    participant Plugin as Plugin Process
+    Core->>Plugin: stdin: PluginRequest JSON
+    Note over Plugin: hook handler runs
+    Plugin-->>Core: stdout: PluginResponse JSON
+    Note over Plugin: stderr (debug only)
+    Core->>Core: validate schema + JSON-safety
+    Core->>Core: merge-patch into release doc
 ```
 
 For JavaScript/TypeScript authors, the framework now exposes a small stable SDK at `@ashwch/relay/plugin-sdk`.
@@ -687,18 +693,23 @@ relay inspect-config --config examples/github-release-assets.yml
 
 ## How the finalize flow works
 
-Today the finalize flow is intentionally easy to reason about:
-
-```text
-1. load config
-2. choose provider/profile/tool plugins
-3. normalize CI input into one release document
-4. let the profile define what "done" means
-5. create, update, or observe the durable GitHub Release record
-6. run configured artifact publisher/verifier hooks
-7. run configured metadata enricher hooks
-8. render or deliver notifications only when allowed
-9. return one machine-readable result
+```mermaid
+flowchart TD
+    R[resolve] --> N[normalize]
+    N --> P[plan]
+    P --> PF[preflight]
+    PF --> RR{release record timing?}
+    RR -->|before artifacts| GH1[create GitHub Release]
+    GH1 --> AP1[artifact publish / verify]
+    RR -->|after completion| AP2[artifact publish / verify]
+    AP2 --> GH2[create GitHub Release]
+    AP1 --> EN[enrich metadata]
+    GH2 --> EN
+    EN --> CP{completed?}
+    CP -->|yes| NF[notify]
+    CP -->|no| WS[wait / skip]
+    NF --> FIN[finalize]
+    WS --> FIN
 ```
 
 The code for that lives in:
