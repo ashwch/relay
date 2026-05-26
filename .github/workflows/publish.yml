@@ -15,7 +15,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
-      - run: echo "//registry.npmjs.org/:_authToken=\${{ secrets.NPM_TOKEN }}" > ~/.npmrc && npm publish
+      - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc && npm publish
       - run: node dist/cli/main.js finalize --config .github/relay.yml --provider builtin:github-actions --tag "${{ github.ref_name }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
