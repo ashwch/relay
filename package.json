@@ -4,6 +4,9 @@
   "description": "Relay: CI-agnostic release finalization framework for teams with mixed release workflows.",
   "license": "MIT",
   "files": ["dist/", "schemas/"],
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "engines": {
     "node": "20.x"
