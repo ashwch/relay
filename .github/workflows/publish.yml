@@ -7,18 +7,15 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       - run: npm run build
       - run: npm test
-      - run: npm publish
+      - run: echo "//registry.npmjs.org/:_authToken=\${{ secrets.NPM_TOKEN }}" > ~/.npmrc && npm publish
       - run: node dist/cli/main.js finalize --config .github/relay.yml --provider builtin:github-actions --tag "${{ github.ref_name }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
