@@ -5,17 +5,39 @@
   "plugin_version": "1.0.0",
   "plugin_api_version": 1,
   "framework_version_range": "^0.1.0",
-  "entrypoint": { "kind": "builtin", "handler": "artifact_publishers.github_release_assets" },
-  "capabilities": ["verify_assets"],
-  "supported_release_modes": ["framework-managed", "tool-observe", "tool-wrap"],
+  "entrypoint": {
+    "kind": "builtin",
+    "handler": "artifact_publishers.github_release_assets"
+  },
+  "capabilities": [
+    "verify_assets"
+  ],
+  "supported_release_modes": [
+    "framework-managed",
+    "tool-observe",
+    "tool-wrap"
+  ],
   "config_schema": null,
   "required_inputs": [],
   "required_secrets": [],
   "optional_secrets": [],
   "permissions": {
-    "github": { "contents": "read" }
+    "github": {
+      "contents": "read"
+    }
   },
-  "supports": { "dry_run": true, "local": true },
-  "outputs": ["asset-verification"],
-  "trust": { "level": "builtin", "allow_in_ci": true }
+  "supports": {
+    "dry_run": true,
+    "local": true
+  },
+  "outputs": [
+    "asset-verification"
+  ],
+  "trust": {
+    "level": "builtin",
+    "allow_in_ci": true
+  },
+  "hooks": [
+    "verify"
+  ]
 }

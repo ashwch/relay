@@ -1,6 +1,7 @@
 import { loadConfig } from '../../core/config/load-config.js';
 import { resolveNotifierPluginConfig, resolveNotifierSelections } from '../../core/config/resolve-plugin-config.js';
 import { loadPlugin } from '../../core/plugins/loader.js';
+import { validatePluginConfig } from '../../core/plugins/config-validation.js';
 import { runPluginHook } from '../../core/orchestration/phase-runner.js';
 import { readJsonFile } from '../../core/io/files.js';
 import { validateNormalizedRelease } from '../../core/release-json/invariants.js';
@@ -23,16 +24,18 @@ export async function runRenderNotificationCommand(options: RenderNotificationCo
 
   const notifierSelection = configuredNotifiers.find((selection) => selection.plugin === notifierRef);
   const notifier = loadPlugin(loaded, notifierRef, 'notifier');
+  const pluginConfig = validatePluginConfig(notifier, resolveNotifierPluginConfig(loaded, notifierSelection ?? { plugin: notifierRef }));
   const result = await runPluginHook({
     manifest: notifier.manifest,
     handler: notifier.handler,
     hook: 'render',
     dryRun: true,
-    pluginConfig: resolveNotifierPluginConfig(loaded, notifierSelection ?? { plugin: notifierRef }),
+    pluginConfig,
     release,
     args: { ...options },
     env: process.env,
     workspaceRoot: process.cwd(),
+    pluginRoot: notifier.rootDir,
   });
 
   process.stdout.write(`${JSON.stringify(result.response.outputs, null, 2)}\n`);

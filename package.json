@@ -1,7 +1,7 @@
 {
-  "name": "release-framework",
+  "name": "@ashwch/relay",
   "version": "0.1.0",
-  "description": "CI-agnostic release finalization framework for teams with mixed release workflows.",
+  "description": "Relay: CI-agnostic release finalization framework for teams with mixed release workflows.",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -9,7 +9,13 @@
     "node": "20.x"
   },
   "bin": {
-    "release-framework": "dist/cli/main.js"
+    "relay": "dist/cli/main.js"
+  },
+  "exports": {
+    "./plugin-sdk": {
+      "types": "./dist/plugin-sdk/index.d.ts",
+      "import": "./dist/plugin-sdk/index.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

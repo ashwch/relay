@@ -1,0 +1,52 @@
+# Example relay config that wires in the example-notifier plugin.
+#
+# Visual model:
+#
+#   repo config (this file)
+#         ↓
+#   framework selects notifier plugin
+#         ↓
+#   render hook → build notification payload
+#   notify hook → deliver notification (dry-run safe)
+#
+# This config file lives inside the plugin directory, so the plugin ref is
+# `path:./` (resolved relative to the config file location).
+#
+# To use this example:
+#   1. Copy it to your repo root as .github/relay.yml
+#   2. Change `path:./` to `path:./plugins/your-notifier-name`
+#   3. Validate: relay inspect-config --config .github/relay.yml
+
+api_version: 1
+
+product_name: Example Service
+release_profile: deploy-release      # what "done" means for this repo
+release_mode: framework-managed      # framework owns the GitHub Release record
+
+provider_plugin: builtin:generic-env  # CI context from env vars / CLI flags
+profile_plugin: builtin:deploy-release
+
+stable_branches:
+  - main
+
+# How the release version is computed
+version_source:
+  type: date-sha                     # e.g. 2026.05.23-9f3c1d2
+
+tag_template: release-{version}
+
+notes_source:
+  type: static                       # framework builds release notes
+
+# ── Plugin wiring ────────────────────────────────────────────────────────────
+
+# Notifiers run after the release record is created/observed and artifacts are
+# verified. The render hook builds a payload; the notify hook delivers it.
+notifiers:
+  - plugin: path:./                  # resolve relative to this config file
+
+# External plugins must be explicit in the allowlist.
+plugin_allowlist:
+  - path:./
+
+allow_local_plugins: true

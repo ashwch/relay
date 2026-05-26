@@ -177,8 +177,8 @@ export function buildCoreReleaseFields(config: ReleaseConfig, input: {
         return {
           plugin,
           enabled: true,
-          delivery_policy: 'once',
-          options,
+          delivery_policy: readNotificationDeliveryPolicy(options),
+          ...(options ? { options } : {}),
         } satisfies NotificationTarget;
       }),
       deliveries: [],
@@ -219,4 +219,19 @@ export interface TemplateValues {
 
 export function applyTagTemplate(template: string, values: TemplateValues): string {
   return template.replace(/\{([a-z_]+)\}/g, (_, key: string) => values[key] ?? `{${key}}`);
+}
+
+/**
+ * Keep the normalized release target honest about runtime notifier behavior.
+ *
+ * Visual rule:
+ *
+ *   missing or unknown delivery_policy -> once
+ *   delivery_policy: always           -> always
+ *
+ * Core uses the same rule during notification delivery, so the release document
+ * and the runtime path tell the same story.
+ */
+function readNotificationDeliveryPolicy(options: JsonObject | undefined): NotificationTarget['delivery_policy'] {
+  return options?.delivery_policy === 'always' ? 'always' : 'once';
 }

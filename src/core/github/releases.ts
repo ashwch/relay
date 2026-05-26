@@ -18,11 +18,18 @@ import { assertExpectedTagTarget, createTagReference, readTagTargetSha } from '.
 export interface GitHubReleaseResponse {
   id: number;
   html_url: string;
+  upload_url?: string;
   tag_name: string;
   name: string | null;
   body: string | null;
   prerelease: boolean;
   published_at: string | null;
+}
+
+export interface GitHubReleaseAssetResponse {
+  id: number;
+  name: string;
+  browser_download_url?: string;
 }
 
 export type ReleaseRecordStatus = 'created' | 'updated' | 'observed' | 'noop';
@@ -31,6 +38,13 @@ export interface GitHubReleaseRecordResult {
   status: ReleaseRecordStatus;
   url: string;
   publishedAt: string | null;
+}
+
+export interface NotificationMarkerState {
+  markerName: string;
+  exists: boolean;
+  uploadUrl: string;
+  asset?: GitHubReleaseAssetResponse;
 }
 
 interface ReleaseMutationInput {
@@ -141,6 +155,55 @@ export async function observeGitHubRelease(
 }
 
 /**
+ * Read the framework-owned notification marker for one notifier target.
+ *
+ * The marker is a tiny release asset. It is deliberately outside Slack, because
+ * Slack incoming webhooks do not give us a stable message id that can be used
+ * safely on reruns.
+ */
+export async function readNotificationMarker(
+  client: GitHubClient,
+  tag: string,
+  markerKey: string,
+): Promise<NotificationMarkerState | null> {
+  const release = await readReleaseByTag(client, tag);
+  if (!release) {
+    return null;
+  }
+  if (!release.upload_url) {
+    throw new Error(`GitHub Release ${tag} response did not include upload_url required for notification marker writes`);
+  }
+
+  const markerName = buildNotificationMarkerAssetName(markerKey);
+  const assets = await listReleaseAssets(client, release.id);
+  return {
+    markerName,
+    exists: assets.some((asset) => asset.name === markerName),
+    uploadUrl: release.upload_url,
+    asset: assets.find((asset) => asset.name === markerName),
+  };
+}
+
+/**
+ * Write the notification marker only after the notifier side effect succeeds.
+ *
+ * The asset body is intentionally operational metadata only. It must not contain
+ * webhook URLs or other secret values.
+ */
+export async function writeNotificationMarker(
+  client: GitHubClient,
+  marker: NotificationMarkerState,
+  body: unknown,
+): Promise<void> {
+  client.requireToken();
+  if (marker.exists) {
+    return;
+  }
+
+  await uploadReleaseAsset(client, marker.uploadUrl, marker.markerName, body);
+}
+
+/**
  * Look up a release by tag because tag identity is the framework's main
  * idempotency anchor in v1.
  */
@@ -150,6 +213,33 @@ async function readReleaseByTag(client: GitHubClient, tag: string): Promise<GitH
     path: `/repos/${client.repository.owner}/${client.repository.name}/releases/tags/${encodeURIComponent(tag)}`,
     allowNotFound: true,
   });
+}
+
+async function listReleaseAssets(client: GitHubClient, releaseId: number): Promise<GitHubReleaseAssetResponse[]> {
+  const assets = await client.requestJson<GitHubReleaseAssetResponse[]>({
+    method: 'GET',
+    path: `/repos/${client.repository.owner}/${client.repository.name}/releases/${releaseId}/assets`,
+  });
+  return assets ?? [];
+}
+
+async function uploadReleaseAsset(
+  client: GitHubClient,
+  uploadUrlTemplate: string,
+  name: string,
+  body: unknown,
+): Promise<GitHubReleaseAssetResponse> {
+  const uploadUrl = `${uploadUrlTemplate.replace(/\{.*\}$/, '')}?name=${encodeURIComponent(name)}`;
+  const uploaded = await client.requestUrlJson<GitHubReleaseAssetResponse>({
+    method: 'POST',
+    url: uploadUrl,
+    body,
+  });
+
+  if (!uploaded) {
+    throw new Error(`notification marker upload ${name} returned no response body`);
+  }
+  return uploaded;
 }
 
 async function updateRelease(
@@ -210,4 +300,12 @@ function toReleaseMutationPayload(input: ReleaseMutationInput): GitHubReleaseMut
  */
 function buildReleaseUrl(client: GitHubClient, tag: string): string {
   return `https://github.com/${client.repository.owner}/${client.repository.name}/releases/tag/${encodeURIComponent(tag)}`;
+}
+
+function buildNotificationMarkerAssetName(markerKey: string): string {
+  const safeKey = markerKey
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `.relay-notification-${safeKey || 'target'}.json`;
 }

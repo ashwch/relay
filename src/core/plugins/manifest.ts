@@ -18,7 +18,7 @@ import satisfies from 'semver/functions/satisfies.js';
 
 import { readJsonFile, readJsonObjectFile } from '../io/files.js';
 import type { JsonObject, JsonValue } from '../types/json.js';
-import type { PluginType } from './request-response.js';
+import type { HookName, PluginType } from './request-response.js';
 
 interface PackageMetadata {
   version: string;
@@ -49,6 +49,7 @@ export interface PluginManifest {
     handler: string;
   };
   capabilities: string[];
+  hooks: HookName[];
   supported_release_modes?: string[];
   config_schema?: string | null;
   required_inputs: string[];
@@ -96,12 +97,53 @@ export function validateManifest(candidate: unknown): PluginManifest {
     throw new PluginManifestError('invalid plugin manifest', details);
   }
   const manifest = candidate;
+  const semanticErrors = validateManifestSemantics(manifest);
+  if (semanticErrors.length > 0) {
+    throw new PluginManifestError('invalid plugin manifest', semanticErrors);
+  }
   if (!satisfies(FRAMEWORK_VERSION, manifest.framework_version_range)) {
     throw new PluginManifestError('plugin is incompatible with framework version', [
       `${manifest.name} expects ${manifest.framework_version_range}, framework is ${FRAMEWORK_VERSION}`,
     ]);
   }
   return manifest;
+}
+
+// This map makes the runtime hook contract visible in one place.
+//
+// Why keep it explicit?
+// Because future plugin reviews should be able to answer this question quickly:
+//
+//   "For a plugin of type X, which hooks may core legally call?"
+//
+// Keeping that answer centralized makes schema validation, docs, tests, and
+// runtime behavior easier to keep aligned.
+const allowedHooksByType: Record<PluginType, HookName[]> = {
+  provider: ['normalize'],
+  profile: ['plan'],
+  release_tool: ['observe', 'publish'],
+  artifact_publisher: ['publish', 'verify'],
+  metadata_enricher: ['enrich'],
+  notifier: ['render', 'notify'],
+};
+
+// Schema validation answers "is the shape present?"
+// This semantic check answers "does the declared runtime contract make sense?"
+function validateManifestSemantics(manifest: PluginManifest): string[] {
+  const allowedHooks = new Set(allowedHooksByType[manifest.type]);
+  const errors: string[] = [];
+
+  if (manifest.hooks.length === 0) {
+    errors.push('/hooks must declare at least one runtime hook');
+  }
+
+  for (const hook of manifest.hooks) {
+    if (!allowedHooks.has(hook)) {
+      errors.push(`/hooks plugin type ${manifest.type} cannot declare hook ${hook}`);
+    }
+  }
+
+  return errors;
 }
 
 function readPackageMetadata(filePath: string): PackageMetadata {

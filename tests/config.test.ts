@@ -13,7 +13,7 @@ import { resolveNotifierPluginConfig } from '../src/core/config/resolve-plugin-c
 import { ConfigValidationError, validateConfig } from '../src/core/config/validate-config.js';
 import { listBuiltinPlugins } from '../src/core/plugins/loader.js';
 
-const fixturePath = path.resolve(import.meta.dirname, 'fixtures/release-framework.yml');
+const fixturePath = path.resolve(import.meta.dirname, 'fixtures/relay.yml');
 
 describe('config loading', () => {
   it('loads and validates the release config fixture', () => {

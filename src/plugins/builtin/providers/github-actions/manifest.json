@@ -9,10 +9,20 @@
     "kind": "builtin",
     "handler": "providers.github_actions"
   },
-  "capabilities": ["normalize"],
-  "supported_release_modes": ["framework-managed", "tool-observe", "tool-wrap"],
+  "capabilities": [
+    "normalize"
+  ],
+  "supported_release_modes": [
+    "framework-managed",
+    "tool-observe",
+    "tool-wrap"
+  ],
   "config_schema": null,
-  "required_inputs": ["repository", "sha", "ref"],
+  "required_inputs": [
+    "repository",
+    "sha",
+    "ref"
+  ],
   "required_secrets": [],
   "optional_secrets": [],
   "permissions": {
@@ -24,7 +34,9 @@
     "id_token": false,
     "network": [],
     "filesystem": {
-      "read": ["$GITHUB_EVENT_PATH"],
+      "read": [
+        "$GITHUB_EVENT_PATH"
+      ],
       "write": []
     },
     "env": {
@@ -45,9 +57,14 @@
     "dry_run": true,
     "local": true
   },
-  "outputs": ["normalized-release-json"],
+  "outputs": [
+    "normalized-release-json"
+  ],
   "trust": {
     "level": "builtin",
     "allow_in_ci": true
-  }
+  },
+  "hooks": [
+    "normalize"
+  ]
 }

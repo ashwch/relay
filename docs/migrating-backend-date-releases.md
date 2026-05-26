@@ -1,6 +1,6 @@
 # Migrating Backend Date Releases
 
-This guide explains how to move a repository onto release-framework when the
+This guide explains how to move a repository onto relay when the
 repository already thinks in date-based releases.
 
 ## The problem
@@ -173,8 +173,8 @@ Before switching a real repository, preview the resolved version locally:
 
 ```bash
 GITHUB_TOKEN=your-token \
-  release-framework normalize \
-  --config .github/release-framework.yml \
+  relay normalize \
+  --config .github/relay.yml \
   --provider builtin:generic-env \
   --repo ExampleOrg/example-backend \
   --sha 9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c \
@@ -193,8 +193,8 @@ What tag would it create or observe?
 
 ```bash
 GITHUB_TOKEN=your-token \
-  release-framework finalize \
-  --config .github/release-framework.yml \
+  relay finalize \
+  --config .github/relay.yml \
   --provider builtin:generic-env \
   --repo ExampleOrg/example-backend \
   --sha 9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c \

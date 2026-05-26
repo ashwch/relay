@@ -1,5 +1,5 @@
 name: release-finalize
-description: Thin GitHub Action wrapper around the release-framework CLI
+description: Thin GitHub Action wrapper around the relay CLI
 #
 # Why this is a composite action right now:
 # - we want one shared codepath during early framework development
@@ -7,9 +7,9 @@ description: Thin GitHub Action wrapper around the release-framework CLI
 # - we do not want a misleading "pretend bundled" action while the contract is still moving
 inputs:
   config_path:
-    description: Path to .github/release-framework.yml
+    description: Path to .github/relay.yml
     required: false
-    default: .github/release-framework.yml
+    default: .github/relay.yml
   release_ref:
     description: Override commit or tag ref
     required: false
@@ -27,10 +27,14 @@ inputs:
     description: Suppress side effects
     required: false
     default: 'false'
+  force_notify:
+    description: Send notifications even when a delivery marker already exists
+    required: false
+    default: 'false'
   output_json:
     description: Path to persist result JSON
     required: false
-    default: .release-framework/result.json
+    default: .relay/result.json
 outputs:
   release_tag:
     description: Final release tag
@@ -76,4 +80,5 @@ runs:
         INPUT_PROVIDER_PLUGIN: ${{ inputs.provider_plugin }}
         INPUT_METADATA_PATH: ${{ inputs.metadata_path }}
         INPUT_DRY_RUN: ${{ inputs.dry_run }}
+        INPUT_FORCE_NOTIFY: ${{ inputs.force_notify }}
         INPUT_OUTPUT_JSON: ${{ inputs.output_json }}

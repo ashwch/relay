@@ -47,8 +47,17 @@ Git tag + GitHub Release = durable audit record
 Slack message            = downstream announcement
 ```
 
-That is why the finalize flow updates or observes the GitHub Release **before**
-notifications.
+That is why the finalize flow updates or observes the GitHub Release before
+notifications. Some profiles also verify external completion facts before the
+GitHub Release is created.
+
+Example:
+
+```text
+npm-package profile
+  verifies package visibility first
+  creates GitHub Release only after the package is installable
+```
 
 ### 2. Completion gates matter
 
@@ -101,11 +110,15 @@ normalize provider input
   ↓
 profile plan
   ↓
-release record
+tool observe may return noop
   ↓
-artifact phase
-  ├─ publish hook when the plugin supports publish/publish_*
-  └─ verify hook when the plugin supports verify/verify_*
+release record and artifact phase
+  ├─ most profiles: release record -> artifact phase
+  └─ package-gated profiles: artifact phase -> release record
+  ↓
+artifact plugins
+  ├─ publish hook when manifest.hooks includes publish
+  └─ verify hook when manifest.hooks includes verify
   ↓
 metadata enrichers
   └─ enrich hook
@@ -122,6 +135,27 @@ The code path lives in:
 - `src/core/orchestration/finalize-run.ts`
 - `src/core/orchestration/phase-runner.ts`
 
+For `tool-observe` profiles, a release tool can stop the run early:
+
+```text
+semantic-release reported a tag
+  -> relay verifies the GitHub Release and continues
+
+semantic-release did not report a tag
+  -> relay returns status=noop
+  -> no GitHub writes, artifact work, or Slack delivery
+```
+
+Why?
+
+```text
+no release-worthy commits
+  -> semantic-release exits successfully
+  -> there is no release record to verify
+```
+
+That is a normal no-op, not a failed release.
+
 ## Artifact phase
 
 Config chooses artifact publishers in order:
@@ -134,12 +168,12 @@ artifact_publishers:
 
 Core does not hard-code what an artifact means.
 
-Instead, each plugin manifest advertises capabilities. Core converts those
-capabilities into hook calls:
+Instead, each plugin manifest advertises hooks. Core converts those hooks into
+runtime calls:
 
 ```text
-capability includes publish or publish_* -> run publish
-capability includes verify  or verify_*  -> run verify
+manifest.hooks includes publish -> run publish
+manifest.hooks includes verify  -> run verify
 ```
 
 That keeps ownership clean:
@@ -160,6 +194,36 @@ builtin:s3-manifest-publish   -> dry-run only; real runs fail fast until impleme
 
 That means a configured artifact plugin either verifies something concrete,
 reports a safe dry-run/skipped result, or fails clearly.
+
+### Artifact-before-release profiles
+
+Some profiles define completion by an external artifact/package becoming
+visible.
+
+```text
+external artifact/package is visible
+  ↓
+GitHub Release can safely announce it
+```
+
+For those profiles, relay runs the artifact phase before the release-record
+phase.
+
+Current example:
+
+```text
+npm-package
+  -> builtin:npm-registry-verify checks package visibility
+  -> only then does relay create/update the GitHub Release
+```
+
+Why this ordering exists:
+
+```text
+package publish fails
+  -> registry visibility check fails
+  -> no GitHub Release is created
+```
 
 ## Metadata enrichment phase
 
@@ -236,8 +300,8 @@ secret store:
 ```bash
 GITHUB_TOKEN=your-token \
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/... \
-release-framework finalize \
-  --config .github/release-framework.yml \
+relay finalize \
+  --config .github/relay.yml \
   --provider builtin:generic-env \
   --repo ExampleOrg/web-app \
   --sha 9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c \
@@ -312,6 +376,58 @@ release.record.idempotency_key = repository + tag
 
 Slack is downstream. GitHub Release is durable.
 
+### Notification markers
+
+For real notifier runs with `delivery_policy: once`, relay writes a tiny marker
+asset on the GitHub Release after the downstream webhook succeeds.
+
+```text
+real notify phase begins
+  ↓
+read GitHub Release assets
+  ↓
+marker exists?
+  ├─ yes and not forced -> skip notifier, append skipped delivery record
+  ├─ yes and forced     -> send anyway
+  └─ no  -> render payload
+          ↓
+          send Slack webhook
+          ↓
+          upload .relay-notification-<target>.json
+          ↓
+          append sent delivery record
+```
+
+First principles:
+
+```text
+Slack webhook success can happen before a CI rerun
+Slack does not give relay a durable webhook message id
+GitHub Release assets are durable and tied to the release tag
+```
+
+The marker asset body is operational metadata only. It must never contain Slack
+webhook URLs or other secret values.
+
+Use `--force-notify` only when a human intentionally wants a repost:
+
+```bash
+relay finalize \
+  --config .github/relay.yml \
+  --provider builtin:generic-env \
+  --repo ExampleOrg/web-app \
+  --sha 9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c \
+  --branch main \
+  --force-notify
+```
+
+First-principles rule:
+
+```text
+normal rerun -> marker prevents duplicate Slack
+forced rerun -> marker is checked, but does not suppress Slack
+```
+
 ## Dry-run behavior
 
 Dry-run should answer "what would happen?" without causing side effects.
@@ -328,18 +444,18 @@ Dry-run should answer "what would happen?" without causing side effects.
 This is why the CLI preview flow is safe:
 
 ```bash
-release-framework normalize \
-  --config .github/release-framework.yml \
+relay normalize \
+  --config .github/relay.yml \
   --provider builtin:generic-env \
   --repo ExampleOrg/web-app \
   --sha 9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c \
   --branch main \
   --dry-run \
-  --output-json /tmp/release-framework-normalized.json
+  --output-json /tmp/relay-normalized.json
 
-release-framework render-notification \
-  --config .github/release-framework.yml \
-  --release-json /tmp/release-framework-normalized.json
+relay render-notification \
+  --config .github/relay.yml \
+  --release-json /tmp/relay-normalized.json
 ```
 
 ## Delivery records
@@ -382,6 +498,19 @@ Typical real delivery:
 }
 ```
 
+Typical skipped rerun delivery:
+
+```json
+{
+  "plugin": "builtin:slack-webhook",
+  "status": "skipped",
+  "details": {
+    "reason": "notification marker exists",
+    "marker_name": ".relay-notification-slack-webhook.json"
+  }
+}
+```
+
 The delivery record intentionally stores the secret **name**, not the secret
 value.
 
@@ -415,9 +544,9 @@ Executable examples live in:
 Useful focused commands:
 
 ```bash
-pnpm dlx npm@10 test -- tests/slack-webhook-notifier.test.ts
-pnpm dlx npm@10 test -- tests/finalize.test.ts
-pnpm dlx npm@10 test -- tests/finalize-phases.test.ts
+npm test -- --run tests/slack-webhook-notifier.test.ts
+npm test -- --run tests/finalize.test.ts
+npm test -- --run tests/finalize-phases.test.ts
 ```
 
 ## Files to read next

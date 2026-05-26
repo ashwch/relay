@@ -1,0 +1,90 @@
+{
+  "hook": "publish",
+  "dry_run": true,
+  "config": {},
+  "inputs": {
+    "env": {},
+    "args": {},
+    "files": {}
+  },
+  "secrets": {},
+  "workspace": {
+    "root": "/Users/monty/work/diversio/DiversioTeam/relay"
+  },
+  "release": {
+    "schema_version": "release-framework.release/v1",
+    "run": {
+      "id": "2026-05-22T12:00:00.000Z-9f3c1d2",
+      "dry_run": true,
+      "provider": "builtin:generic-env",
+      "trigger": "manual"
+    },
+    "source": {
+      "ci_system": "generic-env",
+      "event_name": "manual",
+      "event_action": null,
+      "event_id": null,
+      "received_at": "2026-05-22T12:00:00.000Z"
+    },
+    "repository": {
+      "owner": "ExampleOrg",
+      "name": "web-app",
+      "full_name": "ExampleOrg/web-app",
+      "url": "https://github.com/ExampleOrg/web-app"
+    },
+    "git": {
+      "ref": "refs/heads/main",
+      "ref_name": "main",
+      "ref_type": "branch",
+      "sha": "9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c",
+      "short_sha": "9f3c1d2",
+      "stable_branch": true,
+      "commit_timestamp": null
+    },
+    "profile": {
+      "name": "deploy-release",
+      "release_mode": "framework-managed",
+      "completion_gate": "unspecified",
+      "release_record_timing": "after_completion"
+    },
+    "release": {
+      "version": "2026.05.22-9f3c1d2",
+      "tag": "release-2026.05.22-9f3c1d2",
+      "name": "Plugin Validation Workspace 2026.05.22-9f3c1d2",
+      "body": "Plugin Validation Workspace release 2026.05.22-9f3c1d2.",
+      "prerelease": false,
+      "target_sha": "9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c",
+      "published_at": null,
+      "url": null,
+      "record": {
+        "system": "github",
+        "owner": "core",
+        "status": "pending",
+        "idempotency_key": "ExampleOrg/web-app:release-2026.05.22-9f3c1d2"
+      }
+    },
+    "completion": {
+      "status": "completed",
+      "completed_at": "2026-05-22T12:00:00.000Z",
+      "evidence": []
+    },
+    "artifacts": [],
+    "packages": [],
+    "pull_requests": [],
+    "notifications": {
+      "targets": [],
+      "deliveries": []
+    },
+    "links": {
+      "workflow_url": "https://example.invalid/workflows/release",
+      "commit_url": "https://github.com/ExampleOrg/web-app/commit/9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c",
+      "compare_url": null,
+      "deployment_url": null
+    },
+    "extensions": {
+      "builtin:generic-env": {
+        "input_args": {}
+      }
+    }
+  }
+}

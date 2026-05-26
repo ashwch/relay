@@ -27,7 +27,7 @@ async function run(): Promise<void> {
 }
 
 async function runAction(): Promise<void> {
-  const outputJson = readOptionalInput('output_json') ?? '.release-framework/result.json';
+  const outputJson = readOptionalInput('output_json') ?? '.relay/result.json';
   const result = await finalizeRun({
     configPath: readOptionalInput('config_path') ?? defaultConfigPath,
     providerOverride: readOptionalInput('provider_plugin'),
@@ -36,6 +36,7 @@ async function runAction(): Promise<void> {
     dryRun: core.getBooleanInput('dry_run'),
     args: {
       release_ref: readOptionalInput('release_ref'),
+      force_notify: core.getBooleanInput('force_notify'),
     },
   });
 

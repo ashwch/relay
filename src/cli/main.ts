@@ -6,11 +6,14 @@ import { runInspectConfigCommand } from './commands/inspect-config.js';
 import { runListPluginsCommand } from './commands/list-plugins.js';
 import { runNormalizeCommand, type NormalizeCommandOptions } from './commands/normalize.js';
 import { runRenderNotificationCommand } from './commands/render-notification.js';
+import { runValidatePluginCommand, ValidatePluginCommandError } from './commands/validate-plugin.js';
 import { defaultConfigPath } from '../core/constants.js';
 import { ConfigValidationError } from '../core/config/validate-config.js';
 import { PluginAllowlistError } from '../core/plugins/allowlist.js';
 import { PluginManifestError } from '../core/plugins/manifest.js';
 import { PluginLoadError } from '../core/plugins/loader.js';
+import { PluginConfigValidationError } from '../core/plugins/config-validation.js';
+import { PluginResponseValidationError } from '../core/plugins/response-validation.js';
 import { ReleaseInvariantError } from '../core/release-json/invariants.js';
 
 interface CommonCommanderOptions {
@@ -28,6 +31,7 @@ interface CommonCommanderOptions {
   tag?: string;
   completionStatus?: string;
   dryRun?: boolean;
+  forceNotify?: boolean;
 }
 
 interface InspectCommanderOptions {
@@ -40,8 +44,19 @@ interface RenderNotificationCommanderOptions {
   notifier?: string;
 }
 
+interface ValidatePluginCommanderOptions {
+  pluginConfigJson?: string;
+  requestJson?: string[];
+  requestJsonDir?: string;
+  hook?: string;
+  json?: boolean;
+  // Commander stores --no-* options under the non-negated name.
+  // --no-exec → options.exec (default true, false when --no-exec is present).
+  exec?: boolean;
+}
+
 const program = new Command();
-program.name('release-framework');
+program.name('relay');
 
 function withCommonOptions(command: Command): Command {
   return command
@@ -65,6 +80,7 @@ withCommonOptions(program.command('normalize'))
   .action(async (options: CommonCommanderOptions) => runNormalizeCommand(toNormalizeCommandOptions(options)));
 
 withCommonOptions(program.command('finalize'))
+  .option('--force-notify', 'send notifications even when a delivery marker already exists', false)
   .action(async (options: CommonCommanderOptions) => runFinalizeCommand(toFinalizeCommandOptions(options)));
 
 program.command('inspect-config')
@@ -84,12 +100,31 @@ program.command('render-notification')
 program.command('list-plugins')
   .action(async () => runListPluginsCommand());
 
+program.command('validate-plugin <pluginRef>')
+  .option('--plugin-config-json <path>', 'path to plugin config JSON object')
+  .option('--request-json <path...>', 'one or more request fixture JSON objects')
+  .option('--request-json-dir <path>', 'directory of <hook>.request.json fixtures')
+  .option('--hook <hook>', 'validate one declared hook instead of all hooks')
+  .option('--json', 'emit machine-readable JSON output', false)
+  .option('--no-exec', 'run static validation only')
+  .action(async (pluginRef: string, options: ValidatePluginCommanderOptions) => runValidatePluginCommand({
+    plugin: pluginRef,
+    plugin_config_json: options.pluginConfigJson,
+    request_json: options.requestJson,
+    request_json_dir: options.requestJsonDir,
+    hook: options.hook,
+    json: options.json,
+    // Commander --no-exec stores as options.exec (default=true).
+    // Invert: exec=true → run hooks (no_exec=false); exec=false → skip (no_exec=true).
+    no_exec: !options.exec,
+  }));
+
 program.parseAsync(process.argv).catch((error: unknown) => {
   if (error instanceof ConfigValidationError) {
     fail(error.message, 2, error.details);
     return;
   }
-  if (error instanceof PluginManifestError || error instanceof PluginAllowlistError || error instanceof PluginLoadError) {
+  if (error instanceof PluginManifestError || error instanceof PluginAllowlistError || error instanceof PluginLoadError || error instanceof PluginConfigValidationError || error instanceof PluginResponseValidationError || error instanceof ValidatePluginCommandError) {
     fail(error.message, 3, getErrorDetails(error));
     return;
   }
@@ -136,10 +171,11 @@ function toFinalizeCommandOptions(options: CommonCommanderOptions): FinalizeComm
     tag: options.tag,
     completion_status: options.completionStatus,
     dry_run: options.dryRun ?? false,
+    force_notify: options.forceNotify ?? false,
   };
 }
 
-function getErrorDetails(error: PluginManifestError | PluginAllowlistError | PluginLoadError): string[] {
+function getErrorDetails(error: PluginManifestError | PluginAllowlistError | PluginLoadError | PluginConfigValidationError | PluginResponseValidationError | ValidatePluginCommandError): string[] {
   return 'details' in error && Array.isArray(error.details) ? error.details : [];
 }
 

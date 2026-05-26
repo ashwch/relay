@@ -9,10 +9,19 @@
     "kind": "builtin",
     "handler": "providers.circleci"
   },
-  "capabilities": ["normalize"],
-  "supported_release_modes": ["framework-managed", "tool-observe", "tool-wrap"],
+  "capabilities": [
+    "normalize"
+  ],
+  "supported_release_modes": [
+    "framework-managed",
+    "tool-observe",
+    "tool-wrap"
+  ],
   "config_schema": null,
-  "required_inputs": ["repository", "sha"],
+  "required_inputs": [
+    "repository",
+    "sha"
+  ],
   "required_secrets": [],
   "optional_secrets": [],
   "permissions": {
@@ -40,9 +49,14 @@
     "dry_run": true,
     "local": true
   },
-  "outputs": ["normalized-release-json"],
+  "outputs": [
+    "normalized-release-json"
+  ],
   "trust": {
     "level": "builtin",
     "allow_in_ci": true
-  }
+  },
+  "hooks": [
+    "normalize"
+  ]
 }

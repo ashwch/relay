@@ -1,8 +1,9 @@
 # Example: verify that an npm package is visible before final notification.
 #
 # Use this for package repos where the package publish happens before
-# release-framework finalize. The framework verifies registry visibility and then
-# continues with metadata/notification phases.
+# relay finalize. The framework verifies registry visibility and then
+# creates the GitHub Release. If the package is not visible, no early
+# release record is created.
 api_version: 1
 product_name: Example Component Library
 release_profile: npm-package

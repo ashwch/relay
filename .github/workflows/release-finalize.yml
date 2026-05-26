@@ -13,7 +13,7 @@ on:
       config_path:
         type: string
         required: false
-        default: .github/release-framework.yml
+        default: .github/relay.yml
       release_ref:
         type: string
         required: false
@@ -28,6 +28,10 @@ on:
         type: string
         required: false
       dry_run:
+        type: boolean
+        required: false
+        default: false
+      force_notify:
         type: boolean
         required: false
         default: false
@@ -75,3 +79,4 @@ jobs:
           provider_plugin: ${{ inputs.provider_plugin }}
           metadata_path: ${{ inputs.metadata_path }}
           dry_run: ${{ inputs.dry_run }}
+          force_notify: ${{ inputs.force_notify }}

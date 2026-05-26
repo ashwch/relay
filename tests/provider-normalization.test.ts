@@ -7,8 +7,10 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { normalizeReleaseDocument } from '../src/core/orchestration/finalize-run.js';
+import { buildCoreReleaseFields } from '../src/core/release-json/schema.js';
+import type { ReleaseConfig } from '../src/core/config/types.js';
 
-const configPath = path.resolve(import.meta.dirname, 'fixtures/release-framework.yml');
+const configPath = path.resolve(import.meta.dirname, 'fixtures/relay.yml');
 const githubEventPath = path.resolve(import.meta.dirname, 'fixtures/github-push-event.json');
 const fixedNow = new Date('2026-05-22T19:13:02.000Z');
 const sha = '9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c';
@@ -63,4 +65,60 @@ describe('provider normalization', () => {
     expect(githubRelease.release.tag).toBe(circleRelease.release.tag);
     expect(githubRelease.profile.name).toBe(circleRelease.profile.name);
   });
+
+  it('keeps notifier delivery policy visible in normalized release targets', () => {
+    const fields = buildCoreReleaseFields(buildConfig({
+      notifiers: [
+        {
+          plugin: 'builtin:slack-webhook',
+          options: {
+            delivery_policy: 'always',
+          },
+        },
+      ],
+    }), {
+      owner: 'ExampleOrg',
+      repo: 'web-app',
+      sha,
+      shortSha: sha.slice(0, 7),
+      refName: 'main',
+      stableBranch: true,
+      dryRun: true,
+      providerPlugin: 'builtin:generic-env',
+      trigger: 'test',
+      now: fixedNow,
+    });
+
+    expect(fields.notifications.targets[0]).toMatchObject({
+      plugin: 'builtin:slack-webhook',
+      delivery_policy: 'always',
+    });
+  });
 });
+
+function buildConfig(overrides: Partial<ReleaseConfig> = {}): ReleaseConfig {
+  return {
+    api_version: 1,
+    product_name: 'Example Web App',
+    release_profile: 'deploy-release',
+    release_mode: 'framework-managed',
+    provider_plugin: 'builtin:generic-env',
+    profile_plugin: 'builtin:deploy-release',
+    tool_plugin: null,
+    artifact_publishers: [],
+    notifiers: [],
+    metadata_enrichers: [],
+    plugin_allowlist: [],
+    allow_local_plugins: false,
+    stable_branches: ['main'],
+    version_source: {
+      type: 'date-sha',
+    },
+    tag_template: 'production-{date}-{short_sha}',
+    notes_source: {
+      type: 'associated-release-pr',
+    },
+    plugin_config: {},
+    ...overrides,
+  };
+}

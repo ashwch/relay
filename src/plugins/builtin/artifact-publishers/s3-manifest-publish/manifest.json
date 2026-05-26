@@ -5,17 +5,42 @@
   "plugin_version": "1.0.0",
   "plugin_api_version": 1,
   "framework_version_range": "^0.1.0",
-  "entrypoint": { "kind": "builtin", "handler": "artifact_publishers.s3_manifest_publish" },
-  "capabilities": ["publish_assets", "verify_assets"],
-  "supported_release_modes": ["framework-managed", "tool-observe", "tool-wrap"],
+  "entrypoint": {
+    "kind": "builtin",
+    "handler": "artifact_publishers.s3_manifest_publish"
+  },
+  "capabilities": [
+    "publish_assets",
+    "verify_assets"
+  ],
+  "supported_release_modes": [
+    "framework-managed",
+    "tool-observe",
+    "tool-wrap"
+  ],
   "config_schema": null,
   "required_inputs": [],
   "required_secrets": [],
   "optional_secrets": [],
   "permissions": {
-    "network": ["s3"]
+    "network": [
+      "s3"
+    ]
   },
-  "supports": { "dry_run": true, "local": true },
-  "outputs": ["artifact-publication", "artifact-verification"],
-  "trust": { "level": "builtin", "allow_in_ci": true }
+  "supports": {
+    "dry_run": true,
+    "local": true
+  },
+  "outputs": [
+    "artifact-publication",
+    "artifact-verification"
+  ],
+  "trust": {
+    "level": "builtin",
+    "allow_in_ci": true
+  },
+  "hooks": [
+    "publish",
+    "verify"
+  ]
 }

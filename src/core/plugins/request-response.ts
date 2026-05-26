@@ -1,5 +1,6 @@
 import type { NormalizedRelease } from '../release-json/schema.js';
 import type { EnvMap, RuntimeArgs, StringMap, UnknownMap } from '../types/runtime.js';
+import type { JsonObject } from '../types/json.js';
 
 /**
  * Plugin request/response types.
@@ -23,6 +24,18 @@ export type HookName = 'normalize' | 'plan' | 'observe' | 'publish' | 'verify' |
 
 /**
  * Everything core gives a plugin for one hook call.
+ *
+ * Visual model:
+ *
+ *   config    -> this plugin's resolved options
+ *   release   -> current shared release document
+ *   inputs    -> runtime inputs such as args/files/env
+ *   secrets   -> explicit secret channel
+ *   workspace -> working directory context
+ *
+ * Why keep this envelope explicit?
+ * Because we want built-ins and external subprocess plugins to reason about the
+ * same contract even if they run in different ways.
  */
 export interface PluginRequest {
   plugin_api_version: 1;
@@ -48,6 +61,13 @@ export interface PluginRequest {
 /**
  * Everything a plugin is allowed to return to core.
  *
+ * Visual model:
+ *
+ *   status        -> did the hook succeed, noop, or fail?
+ *   release_patch -> what should change in shared release state?
+ *   outputs       -> extra structured hook-local output
+ *   logs          -> small structured log records
+ *
  * The most important rule is that `release_patch` is a patch, not a full
  * replacement document.
  */
@@ -61,6 +81,23 @@ export interface PluginResponse {
   }>;
   error_code?: string;
   error_message?: string;
+}
+
+/**
+ * Plugin response after core has validated the boundary contract.
+ *
+ * Why keep a second type?
+ * Because there are two different moments in the lifecycle:
+ *
+ *   PluginResponse          -> what plugin code is allowed to attempt
+ *   ValidatedPluginResponse -> what core is willing to trust
+ *
+ * That distinction becomes even more useful once external subprocess plugins
+ * start returning JSON over stdout.
+ */
+export interface ValidatedPluginResponse extends PluginResponse {
+  release_patch: JsonObject;
+  outputs: JsonObject;
 }
 
 /**
@@ -79,6 +116,13 @@ export interface PluginHandler {
 
 /**
  * Small helper for the common "successful plugin response" shape.
+ *
+ * Why this helper exists:
+ * many plugins just want to say
+ *
+ *   "status=ok, here is my patch, here are my outputs"
+ *
+ * without rewriting the envelope each time.
  */
 export function okResponse(release_patch: unknown, outputs: UnknownMap = {}, message?: string): PluginResponse {
   return {

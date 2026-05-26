@@ -1,6 +1,6 @@
 # Config Guide
 
-This file explains `.github/release-framework.yml` from first principles.
+This file explains `.github/relay.yml` from first principles.
 
 ## The goal of config
 
@@ -135,7 +135,7 @@ framework owns idempotency
 Operational note:
 
 ```bash
-GITHUB_TOKEN=your-token release-framework finalize ...
+GITHUB_TOKEN=your-token relay finalize ...
 ```
 
 Without a GitHub token, real mutation cannot happen.
@@ -146,7 +146,7 @@ requires the configured Slack webhook secret, for example:
 ```bash
 GITHUB_TOKEN=your-token \
 SLACK_WEBHOOK_URL=https://hooks.slack.com/services/... \
-release-framework finalize ...
+relay finalize ...
 ```
 
 #### `tool-observe`
@@ -275,13 +275,21 @@ metadata_enrichers:
 Visual model:
 
 ```text
-release record
-  ↓
-verify assets/packages
+profile decides ordering
+  ├─ release record -> verify assets/packages
+  └─ verify packages -> release record
   ↓
 add PR metadata
   ↓
 notify downstream surfaces
+```
+
+The second path matters for `npm-package`:
+
+```text
+package not visible
+  -> finalize fails
+  -> no GitHub Release is created early
 ```
 
 For the detailed phase behavior, read:
@@ -321,8 +329,8 @@ The CLI allows temporary per-run overrides.
 Example:
 
 ```bash
-release-framework finalize \
-  --config .github/release-framework.yml \
+relay finalize \
+  --config .github/relay.yml \
   --provider builtin:circleci \
   --release-profile asset-release
 ```

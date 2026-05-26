@@ -65,7 +65,7 @@ export function createBaseReleaseDocument(config: ReleaseConfig, input: BaseProv
       owner: input.owner,
       name: input.repo,
       full_name: `${input.owner}/${input.repo}`,
-      default_branch: input.defaultBranch,
+      ...(input.defaultBranch ? { default_branch: input.defaultBranch } : {}),
       url: `https://github.com/${input.owner}/${input.repo}`,
     },
     git: {

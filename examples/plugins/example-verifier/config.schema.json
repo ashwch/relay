@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://release-framework.dev/examples/example-verifier/config.schema.json",
+  "title": "Example Verifier Config",
+  "type": "object",
+  "properties": {
+    "expected_asset_names": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -121,6 +121,100 @@ Large release documents and config objects should live in helpers or fixture
 files. Tests should override the smallest relevant piece so the intent of each
 case stays visible.
 
+### 13. Document trust-boundary checks in simple language
+
+If a file validates plugin input, plugin output, config, or release invariants,
+add comments that explain the check in first-principles language.
+
+Good pattern:
+
+```text
+what boundary is being protected
+→ why the check exists
+→ what kind of bad state it prevents
+```
+
+Why this matters here:
+
+This repository spends a lot of time turning flexible runtime input into one
+trusted release document. Future readers should be able to understand those
+checks without reverse-engineering the whole code path.
+
+### 14. Do not use type assertions to skip validation
+
+Avoid `as SomeType` when the value came from JSON, the filesystem, stdin,
+stdout, or another runtime boundary.
+
+Preferred pattern:
+
+```text
+parse unknown input
+→ validate with a small type guard or schema
+→ only then treat it as the named type
+```
+
+Why:
+
+```text
+type assertions make unsafe runtime data look trusted too early
+```
+
+### 15. Keep catch blocks narrow and actionable
+
+Catch only the smallest operation that can realistically fail.
+If parse, validation, and execution can fail for different reasons, give them
+separate error messages.
+
+Why:
+
+```text
+smaller catch blocks
+→ clearer failures
+→ easier tests
+→ less accidental error swallowing
+```
+
+### 16. Share test harnesses before repeating setup
+
+If several tests need the same stdin/stdout buffers, sample requests, or plugin
+runtime harness, extract a tiny helper before the fixture setup starts to sprawl.
+
+Why:
+
+```text
+small shared test harnesses
+→ less fixture drift
+→ clearer per-test intent
+```
+
+### 17. Rebuild before testing built CLI behavior
+
+If you are validating `dist/cli/main.js`, run a fresh build first.
+Do not assume `dist/` reflects the latest source edits.
+
+Why:
+
+```text
+stale dist output
+→ misleading smoke-test results
+→ confusion about whether source or build is wrong
+```
+
+### 18. Prefer one concrete fixture per concrete hook
+
+For author tooling such as `validate-plugin`, if a request fixture declares one
+hook, treat that fixture as belonging to that hook.
+Do not silently reuse a render-shaped fixture for notify, or vice versa.
+
+Why:
+
+```text
+one fixture
+→ one hook mental model
+→ fewer misleading validations
+→ clearer failure messages
+```
+
 ## Commands we expect to stay green
 
 ```bash

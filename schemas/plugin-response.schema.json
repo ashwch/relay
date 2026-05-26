@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://release-framework.dev/schemas/plugin-response.schema.json",
+  "title": "Release Framework Plugin Response v1",
+  "type": "object",
+  "required": ["status", "release_patch", "outputs", "logs"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["ok", "noop", "error"]
+    },
+    "release_patch": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "logs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["level", "message"],
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": ["info", "warn", "error"]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "error_code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "error_message": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}

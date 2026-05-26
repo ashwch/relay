@@ -2,6 +2,19 @@ import { validateConfig } from '../../../../core/config/validate-config.js';
 import { okResponse, type PluginHandler } from '../../../../core/plugins/request-response.js';
 import { createBaseReleaseDocument, parseRepository } from '../shared.js';
 
+// The generic-env provider translates CLI flags and env vars into the shared
+// normalized release document.
+//
+// Visual model:
+//
+//   CLI flags (--repo, --sha, --branch, ...)
+//         ↓  or env vars (RELEASE_REPOSITORY, RELEASE_SHA, ...)
+//   generic-env provider
+//         ↓
+//   normalized release document
+//
+// This is the provider used for manual invocations, local development, and any
+// CI system that passes release context through environment variables.
 export const genericEnvProvider: PluginHandler = {
   async normalize(request) {
     const config = validateConfig(request.config);
@@ -43,7 +56,7 @@ export const genericEnvProvider: PluginHandler = {
       workflowUrl: request.inputs.env.RELEASE_WORKFLOW_URL ?? null,
       completionStatus,
       providerExtension: {
-        input_args: request.inputs.args,
+        input_args: filterUndefinedValues(request.inputs.args),
       },
     });
 
@@ -53,6 +66,19 @@ export const genericEnvProvider: PluginHandler = {
 
 function getValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+// Strip `undefined` values from runtime args before storing them in the
+// provider extension. The JSON-safety validator rejects `undefined` because it
+// is not a JSON type, and JSON.stringify naturally drops such keys anyway.
+function filterUndefinedValues(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 function toCompletionStatus(value: unknown): 'pending' | 'completed' | 'failed' | 'unknown' | undefined {

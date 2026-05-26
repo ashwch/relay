@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://release-framework.dev/schemas/release-config.schema.json",
   "title": "Release Framework Config v1",
-  "description": "Repository-level configuration for release-framework. This file chooses how a project defines release completion, versioning, tags, and shared plugin behavior.",
+  "description": "Repository-level configuration for relay. This file chooses how a project defines release completion, versioning, tags, and shared plugin behavior.",
   "examples": [
     {
       "api_version": 1,

@@ -1,0 +1,65 @@
+# Example relay config that wires in the example-verifier plugin.
+#
+# Visual model:
+#
+#   repo config (this file)
+#         ↓
+#   framework selects verifier plugin
+#         ↓
+#   verify hook → compare release.artifacts against expected_asset_names
+#         ↓
+#   ok → continue; error → fail with descriptive error_message
+#
+# This config file lives inside the plugin directory, so the plugin ref is
+# `path:./` (resolved relative to the config file location).
+#
+# The verifier plugin has a config schema (config.schema.json) that validates
+# the expected_asset_names field before the hook runs. Bad config fails early.
+#
+# To use this example:
+#   1. Copy it to your repo root as .github/relay.yml
+#   2. Change `path:./` to `path:./plugins/your-verifier-name`
+#   3. Update expected_asset_names to match your release assets
+#   4. Validate: relay inspect-config --config .github/relay.yml
+
+api_version: 1
+
+product_name: Example Service
+release_profile: deploy-release      # what "done" means for this repo
+release_mode: framework-managed      # framework owns the GitHub Release record
+
+provider_plugin: builtin:generic-env  # CI context from env vars / CLI flags
+profile_plugin: builtin:deploy-release
+
+stable_branches:
+  - main
+
+# How the release version is computed
+version_source:
+  type: date-sha                     # e.g. 2026.05.23-9f3c1d2
+
+tag_template: release-{version}
+
+notes_source:
+  type: static                       # framework builds release notes
+
+# ── Plugin wiring ────────────────────────────────────────────────────────────
+
+# Artifact publishers run after the GitHub Release record is created/observed.
+# The verify hook checks that expected assets exist in the release.
+artifact_publishers:
+  - plugin: path:./                  # resolve relative to this config file
+
+# External plugins must be explicit in the allowlist.
+plugin_allowlist:
+  - path:./
+
+allow_local_plugins: true
+
+# Plugin-local config is validated against the plugin's config.schema.json
+# before the verify hook executes.
+plugin_config:
+  path:./:
+    expected_asset_names:            # assets the verifier expects to find
+      - release-manifest.json
+      - checksums.txt

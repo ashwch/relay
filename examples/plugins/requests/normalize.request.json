@@ -1,0 +1,41 @@
+{
+  "hook": "normalize",
+  "dry_run": true,
+  "config": {
+    "api_version": 1,
+    "product_name": "Plugin Validation Workspace",
+    "release_profile": "deploy-release",
+    "release_mode": "framework-managed",
+    "provider_plugin": "builtin:generic-env",
+    "profile_plugin": "builtin:deploy-release",
+    "tool_plugin": null,
+    "artifact_publishers": [],
+    "notifiers": [],
+    "metadata_enrichers": [],
+    "plugin_allowlist": [],
+    "allow_local_plugins": true,
+    "stable_branches": ["main"],
+    "version_source": {
+      "type": "date-sha"
+    },
+    "tag_template": "release-{version}",
+    "notes_source": {
+      "type": "static"
+    },
+    "plugin_config": {}
+  },
+  "inputs": {
+    "env": {},
+    "args": {
+      "repo": "ExampleOrg/web-app",
+      "sha": "9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c",
+      "branch": "main"
+    },
+    "files": {}
+  },
+  "secrets": {},
+  "workspace": {
+    "root": "/Users/monty/work/diversio/DiversioTeam/relay"
+  },
+  "release": null
+}

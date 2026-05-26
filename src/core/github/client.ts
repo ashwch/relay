@@ -61,7 +61,7 @@ interface InternalRequestOptions {
 
 const defaultGitHubApiUrl = 'https://api.github.com';
 const gitHubApiVersion = '2022-11-28';
-const gitHubUserAgent = 'release-framework';
+const gitHubUserAgent = 'relay';
 
 export function createGitHubClient(
   repository: GitHubRepositoryRef,

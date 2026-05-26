@@ -1,5 +1,14 @@
 import { loadConfig } from '../../core/config/load-config.js';
-import { resolveArtifactPublishers, resolveMetadataEnrichers, resolveNotifierSelections } from '../../core/config/resolve-plugin-config.js';
+import {
+  resolveArtifactPluginConfig,
+  resolveArtifactPublishers,
+  resolveMetadataEnrichers,
+  resolveNotifierPluginConfig,
+  resolveNotifierSelections,
+  resolvePluginConfig,
+  resolveSelectionPluginConfig,
+} from '../../core/config/resolve-plugin-config.js';
+import { validatePluginConfig } from '../../core/plugins/config-validation.js';
 import { loadPlugin } from '../../core/plugins/loader.js';
 import type { PluginManifest } from '../../core/plugins/manifest.js';
 import type { LoadedConfig, VersionSource } from '../../core/config/types.js';
@@ -27,12 +36,36 @@ interface VersioningInspection {
 export async function runInspectConfigCommand(options: InspectConfigOptions): Promise<void> {
   const loaded = loadConfig(options.config);
   const provider = loadPlugin(loaded, loaded.config.provider_plugin, 'provider');
-  const profile = loadPlugin(loaded, loaded.config.profile_plugin, 'profile');
-  const tool = loaded.config.tool_plugin ? loadPlugin(loaded, loaded.config.tool_plugin, 'release_tool') : null;
-  const notifiers = resolveNotifierSelections(loaded).map((selection) => loadPlugin(loaded, selection.plugin, 'notifier').manifest);
-  const artifactPublishers = resolveArtifactPublishers(loaded).map((selection) => loadPlugin(loaded, selection.plugin, 'artifact_publisher').manifest);
-  const metadataEnrichers = resolveMetadataEnrichers(loaded).map((selection) => loadPlugin(loaded, selection.plugin, 'metadata_enricher').manifest);
+  validatePluginConfig(provider, loaded.config);
 
+  const profile = loadPlugin(loaded, loaded.config.profile_plugin, 'profile');
+  validatePluginConfig(profile, resolvePluginConfig(loaded, loaded.config.profile_plugin));
+
+  const tool = loaded.config.tool_plugin ? loadPlugin(loaded, loaded.config.tool_plugin, 'release_tool') : null;
+  if (tool && loaded.config.tool_plugin) {
+    validatePluginConfig(tool, resolvePluginConfig(loaded, loaded.config.tool_plugin));
+  }
+
+  const notifiers = resolveNotifierSelections(loaded).map((selection) => {
+    const plugin = loadPlugin(loaded, selection.plugin, 'notifier');
+    validatePluginConfig(plugin, resolveNotifierPluginConfig(loaded, selection));
+    return plugin.manifest;
+  });
+  const artifactPublishers = resolveArtifactPublishers(loaded).map((selection) => {
+    const plugin = loadPlugin(loaded, selection.plugin, 'artifact_publisher');
+    validatePluginConfig(plugin, resolveArtifactPluginConfig(loaded, selection));
+    return plugin.manifest;
+  });
+  const metadataEnrichers = resolveMetadataEnrichers(loaded).map((selection) => {
+    const plugin = loadPlugin(loaded, selection.plugin, 'metadata_enricher');
+    validatePluginConfig(plugin, resolveSelectionPluginConfig(loaded, selection));
+    return plugin.manifest;
+  });
+
+  // This command is intentionally presentation-oriented.
+  //
+  // Its job is not to execute release logic. Its job is to make the planned
+  // runtime contract easy for humans to inspect before a real CI run happens.
   const response = {
     config_path: loaded.path,
     release_mode: loaded.config.release_mode,
@@ -83,17 +116,17 @@ function buildPhasePlan(input: {
     {
       phase: 'normalize',
       plugin: input.provider.name,
-      hooks: ['normalize'],
+      hooks: input.provider.hooks,
     },
     {
       phase: 'plan',
       plugin: input.profile.name,
-      hooks: ['plan'],
+      hooks: input.profile.hooks,
     },
     ...(input.tool ? [{
       phase: 'release-tool',
       plugin: input.tool.name,
-      hooks: input.tool.capabilities.includes('observe') ? ['observe'] : input.tool.capabilities,
+      hooks: input.tool.hooks,
     }] : []),
     {
       phase: 'release-record',
@@ -108,25 +141,18 @@ function buildPhasePlan(input: {
     ...input.metadataEnrichers.map((manifest) => ({
       phase: 'enrich',
       plugin: manifest.name,
-      hooks: ['enrich'],
+      hooks: manifest.hooks,
     })),
     ...input.notifiers.map((manifest) => ({
       phase: 'notify',
       plugin: manifest.name,
-      hooks: ['render', 'notify'],
+      hooks: manifest.hooks,
     })),
   ];
 }
 
 function artifactHooks(manifest: PluginManifest): string[] {
-  const hooks: string[] = [];
-  if (manifest.capabilities.some((capability) => capability === 'publish' || capability.startsWith('publish_'))) {
-    hooks.push('publish');
-  }
-  if (manifest.capabilities.some((capability) => capability === 'verify' || capability.startsWith('verify_'))) {
-    hooks.push('verify');
-  }
-  return hooks;
+  return manifest.hooks.filter((hook) => hook === 'publish' || hook === 'verify');
 }
 
 function versionSourceUsesCounter(source: VersionSource): boolean {

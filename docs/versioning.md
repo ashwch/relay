@@ -1,6 +1,6 @@
 # Versioning Guide
 
-This file explains how release-framework versioning works and why the new
+This file explains how relay versioning works and why the new
 options were added.
 
 ## Why this matters
@@ -315,8 +315,8 @@ tag_template: release-{version}
 ### Preview a versioning scheme locally
 
 ```bash
-release-framework normalize \
-  --config .github/release-framework.yml \
+relay normalize \
+  --config .github/relay.yml \
   --provider builtin:generic-env \
   --repo ExampleOrg/web-app \
   --sha 9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c \
@@ -328,8 +328,8 @@ release-framework normalize \
 
 ```bash
 GITHUB_TOKEN=your-token \
-  release-framework normalize \
-  --config .github/release-framework.yml \
+  relay normalize \
+  --config .github/relay.yml \
   --provider builtin:generic-env \
   --repo ExampleOrg/web-app \
   --sha 9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c \

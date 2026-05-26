@@ -1,8 +1,12 @@
 # Example: semantic-release owns the tag and GitHub Release.
 #
 # Use this when semantic-release has already created the durable release record.
-# release-framework observes that record, verifies the tag target, and then runs
+# relay observes that record, verifies the tag target, and then runs
 # shared enrichment/notification behavior without creating a duplicate release.
+#
+# Pass --tag or RELEASE_TAG only when semantic-release actually produced a
+# release. If semantic-release exits successfully with no release-worthy commits,
+# leave the tag unset; relay will return status=noop and skip shared side effects.
 api_version: 1
 product_name: Example Component Library
 release_profile: semantic-release

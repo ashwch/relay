@@ -12,6 +12,7 @@
     "framework_version_range",
     "entrypoint",
     "capabilities",
+    "hooks",
     "required_inputs",
     "required_secrets",
     "optional_secrets",
@@ -43,6 +44,14 @@
       "type": "array",
       "minItems": 1,
       "items": { "type": "string", "minLength": 1 }
+    },
+    "hooks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": ["normalize", "plan", "observe", "publish", "verify", "enrich", "render", "notify"]
+      }
     },
     "supported_release_modes": {
       "type": "array",

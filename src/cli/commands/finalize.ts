@@ -16,6 +16,7 @@ export interface FinalizeCommandOptions {
   tag?: string;
   completion_status?: string;
   release_ref?: string;
+  force_notify?: boolean;
 }
 
 export async function runFinalizeCommand(options: FinalizeCommandOptions): Promise<void> {

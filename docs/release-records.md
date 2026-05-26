@@ -39,13 +39,29 @@ figure out expected tag
 Use this when some other tool already owns release creation.
 
 ```text
-figure out expected tag
-→ verify the GitHub Release exists
+read the tag reported by the tool
+→ if a tag exists, verify the GitHub Release exists
 → verify the tag points at the expected commit
 → continue with shared framework behavior
 ```
 
 This is the safe path for semantic-release-style repositories.
+
+Normal semantic-release no-op:
+
+```text
+semantic-release found no release-worthy commits
+→ no tag is reported
+→ relay returns status=noop
+→ no GitHub Release lookup, artifact work, or Slack notification runs
+```
+
+Why this matters:
+
+```text
+missing tag after "release created" = error
+missing tag after "no release created" = noop
+```
 
 ### Reserved path: `tool-wrap`
 
@@ -181,8 +197,8 @@ All examples below use neutral placeholder repositories such as
 
 ```bash
 GITHUB_TOKEN=your-token \
-  release-framework finalize \
-  --config .github/release-framework.yml \
+  relay finalize \
+  --config .github/relay.yml \
   --provider builtin:generic-env \
   --repo ExampleOrg/web-app \
   --sha 9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c \
@@ -193,8 +209,8 @@ GITHUB_TOKEN=your-token \
 
 ```bash
 GITHUB_TOKEN=your-token \
-  release-framework finalize \
-  --config .github/release-framework.yml \
+  relay finalize \
+  --config .github/relay.yml \
   --provider builtin:circleci \
   --tag v2026.05.22-9f3c1d2
 ```

@@ -24,7 +24,12 @@ import {
   resolveSelectionPluginConfig,
 } from '../config/resolve-plugin-config.js';
 import { createGitHubClient } from '../github/client.js';
-import { ensureFrameworkManagedGitHubRelease, observeGitHubRelease } from '../github/releases.js';
+import {
+  ensureFrameworkManagedGitHubRelease,
+  observeGitHubRelease,
+  readNotificationMarker,
+  writeNotificationMarker,
+} from '../github/releases.js';
 import { readJsonObjectFile } from '../io/files.js';
 import { validateNormalizedRelease } from '../release-json/invariants.js';
 import { applyMergePatch } from '../release-json/merge-patch.js';
@@ -33,6 +38,7 @@ import { resolveReleaseIdentity } from '../release-json/versioning.js';
 import type { EnvMap, RuntimeArgs, StringMap, UnknownMap } from '../types/runtime.js';
 import type { JsonObject } from '../types/json.js';
 import { loadPlugin } from '../plugins/loader.js';
+import { validatePluginConfig } from '../plugins/config-validation.js';
 import type { PluginManifest } from '../plugins/manifest.js';
 import { runPluginHook } from './phase-runner.js';
 import type { FinalizeResult } from './outputs.js';
@@ -66,11 +72,12 @@ export async function normalizeReleaseDocument(options: RuntimeOptions): Promise
     handler: provider.handler,
     hook: 'normalize',
     dryRun: options.dryRun,
-    pluginConfig: loaded.config,
+    pluginConfig: validatePluginConfig(provider, loaded.config),
     release: null,
     args: options.args,
     env,
     workspaceRoot,
+    pluginRoot: provider.rootDir,
   })).release;
 
   if (!normalized) {
@@ -102,25 +109,29 @@ export async function finalizeRun(options: RuntimeOptions): Promise<FinalizeResu
   const workspaceRoot = options.workspaceRoot ?? process.cwd();
 
   // This array is intentionally explicit instead of being derived indirectly.
-  // It acts as a readable run summary and as a reminder of the intended global
-  // phase order.
-  const phases = ['resolve', 'normalize', 'plan', 'preflight', 'release-record', 'artifact-phase', 'enrich', 'notify', 'finalize'];
+  // It acts as a readable run summary and records the actual ordering chosen by
+  // the profile. Most profiles create/observe the GitHub Release first; package
+  // profiles verify external visibility first so a failed package check does not
+  // leave behind an early release record.
+  const phases = ['resolve', 'normalize', 'plan', 'preflight'];
 
   // Step 1: provider-specific input becomes one shared release document.
   let release = await normalizeReleaseDocument(options);
 
   // Step 2: the profile answers "what does done mean for this repo type?"
   const profilePlugin = loadPlugin(loaded, loaded.config.profile_plugin, 'profile');
+  const profilePluginConfig = validatePluginConfig(profilePlugin, resolvePluginConfig(loaded, loaded.config.profile_plugin));
   const planned = (await runPluginHook({
     manifest: profilePlugin.manifest,
     handler: profilePlugin.handler,
     hook: 'plan',
     dryRun: options.dryRun,
-    pluginConfig: resolvePluginConfig(loaded, loaded.config.profile_plugin),
+    pluginConfig: profilePluginConfig,
     release,
     args: options.args,
     env,
     workspaceRoot,
+    pluginRoot: profilePlugin.rootDir,
   })).release;
   if (!planned) {
     throw new Error('profile plugin did not return release document');
@@ -133,47 +144,71 @@ export async function finalizeRun(options: RuntimeOptions): Promise<FinalizeResu
 
   // Step 3: when another release tool owns the durable release record,
   // observe its result instead of creating a duplicate.
+  //
+  // Important no-op case:
+  // semantic-release can exit successfully without creating a release. In that
+  // case the tool plugin returns status=noop, and core stops before GitHub
+  // verification, artifact work, and Slack delivery.
+  let toolObserveNoop = false;
   if (loaded.config.release_mode === 'tool-observe' && loaded.config.tool_plugin) {
     const toolPlugin = loadPlugin(loaded, loaded.config.tool_plugin, 'release_tool');
-    const observed = (await runPluginHook({
+    const toolPluginConfig = validatePluginConfig(toolPlugin, resolvePluginConfig(loaded, loaded.config.tool_plugin));
+    const observedResult = await runPluginHook({
       manifest: toolPlugin.manifest,
       handler: toolPlugin.handler,
       hook: 'observe',
       dryRun: options.dryRun,
-      pluginConfig: resolvePluginConfig(loaded, loaded.config.tool_plugin),
+      pluginConfig: toolPluginConfig,
       release,
       args: options.args,
       env,
       workspaceRoot,
-    })).release;
+      pluginRoot: toolPlugin.rootDir,
+    });
+    const observed = observedResult.release;
     if (!observed) {
       throw new Error('tool plugin did not return release document');
     }
     release = validateNormalizedRelease(observed);
+    toolObserveNoop = observedResult.response.status === 'noop';
   }
 
-  // Step 4: ensure the durable GitHub Release record is in the expected state.
-  release = await ensureReleaseRecord(release, env, options.dryRun);
+  if (toolObserveNoop) {
+    phases.push('finalize');
+    return buildFinalizeResult(release, options.dryRun, phases, 'noop');
+  }
 
-  // Step 5: run ordered artifact and enrichment phases before notification.
-  release = await runArtifactPhase(loaded, release, options, env, workspaceRoot);
+  // Step 4: choose the release-record/artifact ordering required by the profile.
+  //
+  // First-principles rule:
+  //
+  //   if external package/artifact visibility defines "complete"
+  //     -> verify that external fact first
+  //     -> create/update the GitHub Release only after it passes
+  //
+  // This matters for npm-package repos: a failed registry visibility check should
+  // fail before relay creates a GitHub Release.
+  if (shouldRunArtifactPhaseBeforeReleaseRecord(release)) {
+    phases.push('artifact-phase', 'release-record');
+    release = await runArtifactPhase(loaded, release, options, env, workspaceRoot);
+    release = await ensureReleaseRecord(release, env, options.dryRun);
+  } else {
+    phases.push('release-record', 'artifact-phase');
+    release = await ensureReleaseRecord(release, env, options.dryRun);
+    release = await runArtifactPhase(loaded, release, options, env, workspaceRoot);
+  }
+
+  // Step 5: enrich after release and artifact/package facts have settled.
+  phases.push('enrich');
   release = await runMetadataEnrichers(loaded, release, options, env, workspaceRoot);
 
   // Step 6: only deliver notifications after the completion gate is satisfied.
+  phases.push('notify');
   release = await runConfiguredNotifications(loaded, release, options, env, workspaceRoot);
   release = validateNormalizedRelease(release);
 
-  return {
-    status: 'ok',
-    release_tag: release.release.tag,
-    release_url: release.release.url,
-    release_mode: release.profile.release_mode,
-    profile: release.profile.name,
-    notification_sent: release.notifications.deliveries.some((delivery) => delivery.status === 'sent'),
-    dry_run: options.dryRun,
-    normalized_release: release,
-    phases,
-  };
+  phases.push('finalize');
+  return buildFinalizeResult(release, options.dryRun, phases, 'ok');
 }
 
 /**
@@ -356,13 +391,13 @@ async function runArtifactPhase(
   let next = release;
   for (const publisher of resolveArtifactPublishers(loaded)) {
     const plugin = loadPlugin(loaded, publisher.plugin, 'artifact_publisher');
-    const pluginConfig = resolveArtifactPluginConfig(loaded, publisher);
+    const pluginConfig = validatePluginConfig(plugin, resolveArtifactPluginConfig(loaded, publisher));
     const secrets = resolvePluginSecrets(plugin.manifest, pluginConfig, env);
     const shouldPublish = shouldRunArtifactHook(plugin.manifest, 'publish');
     const shouldVerify = shouldRunArtifactHook(plugin.manifest, 'verify');
 
     if (!shouldPublish && !shouldVerify) {
-      throw new Error(`artifact publisher ${plugin.manifest.name} declares no publish or verify capability`);
+      throw new Error(`artifact publisher ${plugin.manifest.name} declares no publish or verify hook`);
     }
 
     if (shouldPublish) {
@@ -409,7 +444,7 @@ async function runMetadataEnrichers(
   let next = release;
   for (const enricher of resolveMetadataEnrichers(loaded)) {
     const plugin = loadPlugin(loaded, enricher.plugin, 'metadata_enricher');
-    const pluginConfig = resolveSelectionPluginConfig(loaded, enricher);
+    const pluginConfig = validatePluginConfig(plugin, resolveSelectionPluginConfig(loaded, enricher));
     next = await runReleasePatchHook({
       loadedPlugin: plugin,
       hook: 'enrich',
@@ -445,10 +480,39 @@ async function runConfiguredNotifications(
   }
 
   let next = release;
-  for (const notifier of resolveNotifierSelections(loaded)) {
-    const plugin = loadPlugin(loaded, notifier.plugin, 'notifier');
-    const pluginConfig = resolveNotifierPluginConfig(loaded, notifier);
-    const secrets = resolvePluginSecrets(plugin.manifest, pluginConfig, env);
+	  for (const notifier of resolveNotifierSelections(loaded)) {
+	    const plugin = loadPlugin(loaded, notifier.plugin, 'notifier');
+	    const pluginConfig = validatePluginConfig(plugin, resolveNotifierPluginConfig(loaded, notifier));
+	    const secrets = resolvePluginSecrets(plugin.manifest, pluginConfig, env);
+	    const markerKey = buildNotificationMarkerKey(notifier.plugin);
+	    const deliveryPolicy = readDeliveryPolicy(notifier);
+	    const forceNotify = readForceNotify(options.args);
+	    let notificationMarker: Awaited<ReturnType<typeof readNotificationMarker>> = null;
+
+	    if (!options.dryRun && deliveryPolicy === 'once') {
+	      const client = createGitHubClient({
+	        owner: next.repository.owner,
+        name: next.repository.name,
+      }, env);
+      notificationMarker = await readNotificationMarker(client, next.release.tag, markerKey);
+	      if (!notificationMarker) {
+	        throw new Error(`cannot check notification marker for ${next.release.tag} because GitHub Release was not found`);
+	      }
+	      if (notificationMarker.exists && !forceNotify) {
+	        next.notifications.deliveries.push({
+	          plugin: notifier.plugin,
+	          status: 'skipped',
+          recorded_at: new Date().toISOString(),
+          details: {
+            reason: 'notification marker exists',
+            marker_name: notificationMarker.markerName,
+            marker_asset_url: notificationMarker.asset?.browser_download_url,
+          },
+        });
+        continue;
+      }
+    }
+
     const rendered = await runPluginHook({
       manifest: plugin.manifest,
       handler: plugin.handler,
@@ -460,6 +524,7 @@ async function runConfiguredNotifications(
       env,
       workspaceRoot,
       secrets,
+      pluginRoot: plugin.rootDir,
     });
 
     next = validateNormalizedRelease(rendered.release ?? next);
@@ -492,12 +557,31 @@ async function runConfiguredNotifications(
       env,
       workspaceRoot,
       secrets,
+      pluginRoot: plugin.rootDir,
     });
 
     next = validateNormalizedRelease(notified.release ?? next);
+    const sent = notified.response.status !== 'noop';
+    if (sent && deliveryPolicy === 'once') {
+      const client = createGitHubClient({
+        owner: next.repository.owner,
+        name: next.repository.name,
+      }, env);
+      if (!notificationMarker) {
+        throw new Error(`cannot write notification marker for ${next.release.tag} because GitHub Release was not found`);
+      }
+      await writeNotificationMarker(client, notificationMarker, {
+        plugin: notifier.plugin,
+        release_tag: next.release.tag,
+        release_url: next.release.url,
+        delivery_status: notified.response.status,
+        recorded_at: new Date().toISOString(),
+      });
+    }
+
     next.notifications.deliveries.push({
       plugin: notifier.plugin,
-      status: notified.response.status === 'noop' ? 'skipped' : 'sent',
+      status: sent ? 'sent' : 'skipped',
       recorded_at: new Date().toISOString(),
       details: buildNotificationDetails(payload, notified.response.outputs.delivery),
     });
@@ -529,6 +613,7 @@ async function runReleasePatchHook(options: ReleasePatchHookOptions): Promise<No
     env: options.env,
     workspaceRoot: options.workspaceRoot,
     secrets: options.secrets,
+    pluginRoot: options.loadedPlugin.rootDir,
   });
   return validateNormalizedRelease(result.release ?? options.release);
 }
@@ -565,7 +650,12 @@ function resolvePluginSecrets(manifest: PluginManifest, pluginConfig: JsonObject
 }
 
 function shouldRunArtifactHook(manifest: PluginManifest, hook: 'publish' | 'verify'): boolean {
-  return manifest.capabilities.some((capability) => capability === hook || capability.startsWith(`${hook}_`));
+  return manifest.hooks.includes(hook);
+}
+
+function shouldRunArtifactPhaseBeforeReleaseRecord(release: NormalizedRelease): boolean {
+  return release.profile.release_record_timing === 'after_completion'
+    && (release.profile.package_visibility_required === true || release.profile.artifact_completion_required === true);
 }
 
 function buildNotificationDetails(payload: unknown, delivery: unknown): UnknownMap | undefined {
@@ -577,6 +667,37 @@ function buildNotificationDetails(payload: unknown, delivery: unknown): UnknownM
     details.delivery = delivery;
   }
   return Object.keys(details).length > 0 ? details : undefined;
+}
+
+function buildNotificationMarkerKey(pluginRef: string): string {
+  return pluginRef.replace(/^builtin:/, '');
+}
+
+function readDeliveryPolicy(selection: { options?: JsonObject }): 'once' | 'always' {
+  return selection.options?.delivery_policy === 'always' ? 'always' : 'once';
+}
+
+function readForceNotify(args: RuntimeArgs): boolean {
+  return args.force_notify === true;
+}
+
+function buildFinalizeResult(
+  release: NormalizedRelease,
+  dryRun: boolean,
+  phases: string[],
+  status: FinalizeResult['status'],
+): FinalizeResult {
+  return {
+    status,
+    release_tag: release.release.tag,
+    release_url: release.release.url,
+    release_mode: release.profile.release_mode,
+    profile: release.profile.name,
+    notification_sent: release.notifications.deliveries.some((delivery) => delivery.status === 'sent'),
+    dry_run: dryRun,
+    normalized_release: release,
+    phases,
+  };
 }
 
 /**

@@ -35,9 +35,26 @@ const builtinPluginTypes: PluginType[] = [
   'release_tool',
 ];
 
+/**
+ * One plugin after the framework has resolved its identity.
+ *
+ * Visual model:
+ *
+ *   pluginRef -> how config referred to it
+ *   manifest  -> declared contract
+ *   handler   -> built-in in-process implementation, if any
+ *   rootDir   -> external plugin root directory, if any
+ *
+ * Why keep both `handler` and `rootDir` optional?
+ * Because built-ins and external plugins take different execution paths, but
+ * the rest of the framework still wants one small object that says
+ * "this is the plugin we resolved for this phase".
+ */
 export interface LoadedPlugin {
+  pluginRef: string;
   manifest: PluginManifest;
   handler?: PluginHandler;
+  rootDir?: string;
 }
 
 export class PluginLoadError extends Error {
@@ -47,18 +64,68 @@ export class PluginLoadError extends Error {
 }
 
 /**
+ * Resolve one plugin ref without requiring the caller to already know the
+ * plugin type.
+ *
+ * Why this helper exists:
+ * author-facing tooling such as `validate-plugin` often starts from the plugin
+ * ref itself. At that stage we want to inspect the manifest first, then use the
+ * manifest type as the source of truth for later checks.
+ */
+export function loadPluginForValidation(loadedConfig: LoadedConfig, pluginRef: string): LoadedPlugin {
+  if (pluginRef.startsWith('builtin:')) {
+    const matches = builtinPluginTypes.flatMap((pluginType) => {
+      const manifestPath = builtinManifestPaths[pluginType]?.[pluginRef];
+      const handler = builtinHandlers[pluginType]?.[pluginRef];
+      return manifestPath && handler
+        ? [{ pluginType, manifestPath, handler }]
+        : [];
+    });
+
+    if (matches.length === 0) {
+      throw new PluginLoadError(`unknown built-in plugin ${pluginRef}`);
+    }
+    if (matches.length > 1) {
+      throw new PluginLoadError(`built-in plugin ${pluginRef} is ambiguous across multiple plugin types; validate it through a config entrypoint instead`);
+    }
+
+    const match = matches[0];
+    const manifest = readManifest(match.manifestPath);
+    return {
+      pluginRef,
+      manifest,
+      handler: match.handler,
+      rootDir: path.dirname(match.manifestPath),
+    };
+  }
+
+  assertPluginAllowed(loadedConfig, pluginRef);
+  const resolved = resolveExternalPluginLocation(loadedConfig, pluginRef);
+  const manifest = readManifest(resolved.manifestPath);
+  if (manifest.entrypoint.kind === 'builtin') {
+    throw new PluginLoadError(`external plugin ${pluginRef} cannot declare entrypoint.kind=builtin`);
+  }
+  return {
+    pluginRef,
+    manifest,
+    rootDir: resolved.rootDir,
+  };
+}
+
+/**
  * Resolve one plugin ref into its validated manifest and, for built-ins, its
  * in-process handler.
  *
  * Visual resolution order:
  *
  *   builtin:... -> checked-in manifest + checked-in handler
- *   npm:...     -> allowlisted installed package + manifest only
- *   path:...    -> allowlisted local path + manifest only
+ *   npm:...     -> allowlisted installed package + manifest + plugin root
+ *   path:...    -> allowlisted local path + manifest + plugin root
  *
- * External plugin execution is intentionally not implemented yet.
- * For now, this function still validates those manifests so the contract can be
- * tested before the runtime grows more powerful.
+ * Why stop at plugin roots instead of executing here?
+ * Because loading and execution are separate trust-boundary questions.
+ * This file answers "what plugin contract are we talking about?"
+ * The phase runner answers "how should that contract actually run?"
  */
 export function loadPlugin(loadedConfig: LoadedConfig, pluginRef: string, expectedType: PluginType): LoadedPlugin {
   if (pluginRef.startsWith('builtin:')) {
@@ -74,16 +141,19 @@ export function loadPlugin(loadedConfig: LoadedConfig, pluginRef: string, expect
     if (!handler) {
       throw new PluginLoadError(`built-in plugin ${pluginRef} is missing a registered handler`);
     }
-    return { manifest, handler };
+    return {
+      pluginRef,
+      manifest,
+      handler,
+      rootDir: path.dirname(manifestPath),
+    };
   }
 
-  assertPluginAllowed(loadedConfig, pluginRef);
-  const manifestPath = resolveExternalManifestPath(loadedConfig, pluginRef);
-  const manifest = readManifest(manifestPath);
-  if (manifest.type !== expectedType) {
-    throw new PluginLoadError(`plugin ${pluginRef} is type ${manifest.type}, expected ${expectedType}`);
+  const plugin = loadPluginForValidation(loadedConfig, pluginRef);
+  if (plugin.manifest.type !== expectedType) {
+    throw new PluginLoadError(`plugin ${pluginRef} is type ${plugin.manifest.type}, expected ${expectedType}`);
   }
-  return { manifest };
+  return plugin;
 }
 
 /**
@@ -110,26 +180,43 @@ export function listBuiltinPlugins(): PluginManifest[] {
 }
 
 /**
- * Resolve the manifest path for a non-built-in plugin ref.
+ * Resolve the manifest path and plugin root for a non-built-in plugin ref.
  *
- * Why manifest path resolution is separate from execution:
- * we want to validate and inspect external plugin contracts before we grant the
- * runtime permission to actually execute external code.
+ * Visual model:
+ *
+ *   plugin ref
+ *      ↓
+ *   plugin root directory
+ *      ↓
+ *   plugin-manifest.json
+ *      ↓
+ *   later: entrypoint handler inside that root
+ *
+ * Keeping the root explicit now makes subprocess execution easier to audit
+ * later, because the runtime can enforce that handlers stay inside the plugin's
+ * own directory.
  */
-function resolveExternalManifestPath(loadedConfig: LoadedConfig, pluginRef: string): string {
+function resolveExternalPluginLocation(loadedConfig: LoadedConfig, pluginRef: string): { manifestPath: string; rootDir: string } {
   if (pluginRef.startsWith('path:')) {
     const relativePath = pluginRef.slice('path:'.length);
-    return path.resolve(loadedConfig.dir, relativePath, 'plugin-manifest.json');
+    const rootDir = path.resolve(loadedConfig.dir, relativePath);
+    return {
+      rootDir,
+      manifestPath: path.resolve(rootDir, 'plugin-manifest.json'),
+    };
   }
   if (pluginRef.startsWith('npm:')) {
     const packageName = pluginRef.slice('npm:'.length);
     const packageJsonPath = require.resolve(`${packageName}/package.json`, { paths: [process.cwd()] });
-    const packageDir = path.dirname(packageJsonPath);
-    const manifestPath = path.resolve(packageDir, 'plugin-manifest.json');
+    const rootDir = path.dirname(packageJsonPath);
+    const manifestPath = path.resolve(rootDir, 'plugin-manifest.json');
     if (!fs.existsSync(manifestPath)) {
       throw new PluginLoadError(`package plugin ${pluginRef} is missing plugin-manifest.json`);
     }
-    return manifestPath;
+    return {
+      rootDir,
+      manifestPath,
+    };
   }
   throw new PluginLoadError(`unsupported plugin ref ${pluginRef}`);
 }

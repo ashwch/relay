@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://release-framework.dev/examples/example-enricher/config.schema.json",
+  "title": "Example Enricher Config",
+  "type": "object",
+  "properties": {
+    "summary_label": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "additionalProperties": false
+}

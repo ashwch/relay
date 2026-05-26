@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping improve `release-framework`.
+Thank you for helping improve Relay.
 
 This repository is currently private, but the contribution rules are written as
 if the project may become public later. The goal is to make the release contract

@@ -10,8 +10,8 @@ what must be true before it is safe to implement.
 ## The short version
 
 ```text
-tool-observe = release tool already ran before release-framework starts
-tool-wrap    = release-framework would run the release tool itself
+tool-observe = release tool already ran before relay starts
+tool-wrap    = relay would run the release tool itself
 ```
 
 Today, if a config uses:
@@ -257,7 +257,7 @@ Need framework to create/update GitHub Release?
 Another tool already creates GitHub Release before finalization?
   -> tool-observe
 
-Want release-framework to run the tool itself?
+Want relay to run the tool itself?
   -> not supported yet; future tool-wrap
 ```
 

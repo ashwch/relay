@@ -80,7 +80,7 @@ It is useful for:
 ### Example: inspect config
 
 ```bash
-release-framework inspect-config --config .github/release-framework.yml
+relay inspect-config --config .github/relay.yml
 ```
 
 `inspect-config` now shows two especially useful planning sections:
@@ -99,8 +99,8 @@ actually run.
 ### Example: preview normalized release JSON
 
 ```bash
-release-framework normalize \
-  --config .github/release-framework.yml \
+relay normalize \
+  --config .github/relay.yml \
   --provider builtin:generic-env \
   --repo ExampleOrg/web-app \
   --sha 9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c \
@@ -121,18 +121,33 @@ print payload, no webhook send
 ```
 
 ```bash
-release-framework normalize \
-  --config .github/release-framework.yml \
+relay normalize \
+  --config .github/relay.yml \
   --provider builtin:generic-env \
   --repo ExampleOrg/web-app \
   --sha 9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c \
   --branch main \
   --dry-run \
-  --output-json /tmp/release-framework-normalized.json
+  --output-json /tmp/relay-normalized.json
 
-release-framework render-notification \
-  --config .github/release-framework.yml \
-  --release-json /tmp/release-framework-normalized.json
+relay render-notification \
+  --config .github/relay.yml \
+  --release-json /tmp/relay-normalized.json
+```
+
+### Example: force a notification repost
+
+Normal reruns use the GitHub Release marker to avoid duplicate Slack posts.
+When a human intentionally wants a repost, use `--force-notify`:
+
+```bash
+relay finalize \
+  --config .github/relay.yml \
+  --provider builtin:generic-env \
+  --repo ExampleOrg/web-app \
+  --sha 9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c \
+  --branch main \
+  --force-notify
 ```
 
 For the full final-mile phase model, read:
@@ -173,9 +188,10 @@ Instead of copying release YAML into every repository, a consumer repo can do th
 ```yaml
 jobs:
   release:
-    uses: your-org/release-framework/.github/workflows/release-finalize.yml@v1
+    uses: ashwch/relay/.github/workflows/release-finalize.yml@v1
     with:
-      config_path: .github/release-framework.yml
+      config_path: .github/relay.yml
+      force_notify: false
     secrets: inherit
 ```
 

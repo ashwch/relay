@@ -9,7 +9,7 @@ import { validateNormalizedRelease } from '../release-json/invariants.js';
  *
  * The job here is only:
  * - build the request envelope
- * - call the requested hook
+ * - execute the requested hook (built-in or subprocess)
  * - fail clearly if the plugin misbehaves
  * - merge the returned patch back into the shared release document
  */
@@ -18,8 +18,19 @@ import type { NormalizedRelease } from '../release-json/schema.js';
 import type { EnvMap, RuntimeArgs, StringMap } from '../types/runtime.js';
 import type { PluginHandler, PluginRequest, PluginResponse, HookName } from '../plugins/request-response.js';
 import type { PluginManifest } from '../plugins/manifest.js';
+import { validatePluginResponse } from '../plugins/response-validation.js';
+import { runExternalPluginHook } from '../plugins/subprocess-runner.js';
 
 // Everything a plugin hook call needs in one place.
+//
+// Visual model:
+//
+//   manifest   -> declared contract
+//   handler    -> built-in implementation, if any
+//   pluginRoot -> external plugin directory, if any
+//   release    -> current shared release document
+//   args/env   -> runtime inputs
+//   secrets    -> explicit secret bag
 //
 // The context is intentionally explicit so a future reader can see exactly what
 // data crosses the plugin boundary during one hook execution.
@@ -35,6 +46,8 @@ export interface HookExecutionContext {
   files?: StringMap;
   workspaceRoot: string;
   secrets?: StringMap;
+  pluginRoot?: string;
+  hookTimeoutMs?: number;
 }
 
 export class PluginExecutionError extends Error {
@@ -54,17 +67,23 @@ export async function runPluginHook(context: HookExecutionContext): Promise<{
   response: PluginResponse;
   release: NormalizedRelease | null;
 }> {
-  const hookHandler = context.handler?.[context.hook];
-  if (!hookHandler) {
-    const message = context.manifest.entrypoint.kind === 'builtin'
-      ? `plugin ${context.manifest.name} does not implement required hook ${context.hook}`
-      : `plugin ${context.manifest.name} cannot be executed yet because external plugin runtime loading is not implemented`;
-    throw new PluginExecutionError(message);
+  // First check the manifest contract, then the actual handler implementation.
+  //
+  // Why this order?
+  // Because "hook is not declared" and "hook is declared but missing at
+  // runtime" are different classes of mistakes:
+  //
+  // - undeclared hook  -> manifest/runtime contract bug
+  // - missing handler  -> implementation wiring bug
+  //
+  // Keeping those failures separate makes plugin debugging much less magical.
+  if (!context.manifest.hooks.includes(context.hook)) {
+    throw new PluginExecutionError(`plugin ${context.manifest.name} does not declare required hook ${context.hook}`);
   }
 
   // Build the request envelope that every plugin sees.
-  // This keeps built-ins and future external plugins on the same logical
-  // contract even if their execution models differ.
+  // This keeps built-ins and external subprocess plugins on the same logical
+  // contract even though their execution models differ.
   const request: PluginRequest = {
     plugin_api_version: 1,
     hook: context.hook,
@@ -76,7 +95,7 @@ export async function runPluginHook(context: HookExecutionContext): Promise<{
     config: context.pluginConfig,
     release: context.release,
     inputs: {
-      env: context.env,
+      env: selectPluginInputEnv(context),
       args: context.args,
       files: context.files ?? {},
     },
@@ -86,7 +105,29 @@ export async function runPluginHook(context: HookExecutionContext): Promise<{
     },
   };
 
-  const response = await hookHandler(request);
+  // Built-ins run through their in-process handler.
+  // External plugins run through the subprocess boundary.
+  //
+  // Both paths return one logical thing: "raw plugin response to validate".
+  const hookHandler = context.handler?.[context.hook];
+  const rawResponse = hookHandler
+    ? await hookHandler(request)
+    : context.pluginRoot
+      ? await runExternalPluginHook(context.manifest, context.pluginRoot, request, context.hookTimeoutMs)
+      : undefined;
+
+  if (rawResponse === undefined) {
+    const message = context.manifest.entrypoint.kind === 'builtin'
+      ? `plugin ${context.manifest.name} does not implement required hook ${context.hook}`
+      : `plugin ${context.manifest.name} is missing an executable plugin root for external execution`;
+    throw new PluginExecutionError(message);
+  }
+
+  // Validate the response before merge-patching anything.
+  //
+  // This is the point where plugin-local behavior becomes shared framework
+  // state, so the contract needs to be fully checked here.
+  const response = validatePluginResponse(rawResponse);
 
   // A plugin returns a merge patch, not a whole new world.
   // That rule keeps ownership boundaries simple: plugins patch the fields they
@@ -121,4 +162,17 @@ function shouldCreateReleaseDocument(patch: unknown): boolean {
  */
 function validateInitialReleaseDocument(patch: unknown): NormalizedRelease {
   return validateNormalizedRelease(patch);
+}
+
+// External plugins get an empty `inputs.env` by default.
+//
+// Why be this strict?
+// Because `request.secrets` is the explicit secret boundary. Passing the full
+// runtime environment through `inputs.env` would make it too easy for external
+// plugins to depend on ambient CI state or accidentally observe unrelated
+// secrets. Built-ins stay on the richer in-process contract for now.
+function selectPluginInputEnv(context: HookExecutionContext): EnvMap {
+  return context.manifest.entrypoint.kind === 'builtin'
+    ? context.env
+    : {};
 }
