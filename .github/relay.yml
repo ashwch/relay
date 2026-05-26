@@ -1,0 +1,24 @@
+api_version: 1
+product_name: Relay
+release_profile: npm-package
+release_mode: framework-managed
+provider_plugin: builtin:github-actions
+profile_plugin: builtin:npm-package
+tool_plugin: null
+artifact_publishers:
+  - plugin: builtin:npm-registry-verify
+notifiers: []
+metadata_enrichers: []
+plugin_allowlist: []
+allow_local_plugins: false
+stable_branches: [main]
+version_source:
+  type: explicit
+  value: '0.0.0'        # placeholder — CI passes --tag at runtime
+tag_template: v{version}
+notes_source:
+  type: static
+package:
+  name: '@ashwch/relay'
+  registry_url: https://registry.npmjs.org
+plugin_config: {}
