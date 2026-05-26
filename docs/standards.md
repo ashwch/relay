@@ -1,24 +1,23 @@
-# Local Standards
+# Coding Standards
 
-This repository is TypeScript-first, so some Python- or Django-specific rules do not apply directly here.
+This repository is TypeScript-first, with explicit typed boundaries at every
+plugin, CLI, and runtime surface.
 
-Still, the spirit of those rules does apply.
-
-## First-principles translation
+## First-principles foundation
 
 ```text
-Python rule: avoid loose dicts
-TypeScript translation: prefer named interfaces and shared JSON/runtime types
+Rule: avoid loose structural types at boundaries
+Translation: prefer named interfaces and shared JSON/runtime types
 ```
 
 ```text
-Python rule: avoid dynamic magic
-TypeScript translation: keep plugin/runtime boundaries explicit and typed
+Rule: avoid hidden runtime magic
+Translation: keep plugin/runtime boundaries explicit and typed
 ```
 
 ```text
-Python rule: avoid hidden side effects
-TypeScript translation: keep action, CLI, and core orchestration on one shared codepath
+Rule: avoid hidden side effects
+Translation: keep action, CLI, and core orchestration on one shared codepath
 ```
 
 ## Standards we enforce here
@@ -224,18 +223,3 @@ npm test
 npm run build
 pnpm dlx madge --extensions ts --circular src
 ```
-
-## Non-applicable source-language rules
-
-These are useful in other codebases, but not directly applicable in this repository:
-
-- Ruff
-- Django ORM reverse relation guidance
-- framework-specific structured logging conventions from other stacks
-- Python `TypedDict`
-
-Their TypeScript equivalents are still encouraged here:
-
-- explicit interfaces and shared types
-- readable typed payloads
-- small auditable integration boundaries
