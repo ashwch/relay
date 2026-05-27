@@ -13,8 +13,11 @@ plugin_allowlist: []
 allow_local_plugins: false
 stable_branches: [main]
 version_source:
-  type: package-json
+  type: file
+  format: json
   path: package.json
+  key_path:
+    - version
 tag_template: v{version}
 notes_source:
   type: static

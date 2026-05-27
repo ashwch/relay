@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import YAML from 'yaml';
+import { parse as parseToml } from 'smol-toml';
 import type { ReleaseType } from 'semver';
 import inc from 'semver/functions/inc.js';
 import parse from 'semver/functions/parse.js';
@@ -13,8 +14,10 @@ import type { ReleaseConfig, VersionSource } from '../config/types.js';
 import {
   counterBasedVersionSourceTypes,
   dateReleaseSourceTypes,
+  fileVersionSourceFormats,
   readVersionSourceBooleanOption,
   readVersionSourceNumberOption,
+  readVersionSourceStringArrayOption,
   readVersionSourceStringOption,
   templateUsesCounter,
   versionSourceTypes,
@@ -81,7 +84,6 @@ interface LocalSemverTag {
 const githubTagCounterSource = 'github-tag';
 const explicitCounterSource = 'explicit';
 const defaultInitialSemver = '0.1.0';
-const defaultPackageJsonPath = 'package.json';
 const defaultChangesetDirectory = '.changeset';
 const defaultSemverIncrement: ReleaseType = 'patch';
 
@@ -116,7 +118,7 @@ const semverIncrementPriority: Record<string, number> = {
  *     -> one idempotency key
  *
  * After this function runs, later phases should not need to care *why* a
- * version came from package.json, a git tag, Changesets, or commit history.
+ * version came from a structured file, a git tag, Changesets, or commit history.
  */
 export async function resolveReleaseIdentity(
   config: ReleaseConfig,
@@ -193,8 +195,10 @@ async function resolveVersionFromSource(
     return explicit;
   }
 
-  if (source.type === versionSourceTypes.packageJson) {
-    return resolvePackageJsonVersion(source, runtime.workspaceRoot);
+  if (source.type === versionSourceTypes.file) {
+    // File-backed versions are still just observed versions.
+    // Relay does not invent semver here; it reads the repo's declared value.
+    return resolveFileVersion(source, runtime.workspaceRoot);
   }
 
   if (source.type === versionSourceTypes.env) {
@@ -246,18 +250,100 @@ async function resolveVersionFromSource(
   return `${context.date}-${context.shortSha}`;
 }
 
-// Observe the version that the package repo already declared.
+// Observe the version that the repo already declared in a structured file.
 //
-// This is the recommended self-hosting path for Relay because npm publication,
-// package.json, and GitHub release identity should all agree on the same final
-// semver without Relay inventing a second source of truth.
-function resolvePackageJsonVersion(source: VersionSource, workspaceRoot: string): string {
-  const filePath = path.resolve(workspaceRoot, readVersionSourceStringOption(source, 'path') ?? defaultPackageJsonPath);
-  const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8')) as unknown;
-  if (!isRecord(parsed) || typeof parsed.version !== 'string' || parsed.version.length === 0) {
-    throw new Error(`version_source.type=package-json requires a non-empty version in ${filePath}`);
+// This keeps Relay usable across ecosystems without adding one source type per
+// package manager or build tool. The source is intentionally static-only: Relay
+// reads one string from one structured file and does not try to evaluate
+// dynamic Python versioning, Cargo workspace inheritance, or Go module rules.
+function resolveFileVersion(source: VersionSource, workspaceRoot: string): string {
+  const format = readVersionSourceStringOption(source, 'format');
+  const configuredPath = readVersionSourceStringOption(source, 'path');
+  const keyPath = readVersionSourceStringArrayOption(source, 'key_path');
+  if (!format || !configuredPath || !keyPath || keyPath.length === 0) {
+    throw new Error('version_source.type=file requires version_source.format, version_source.path, and version_source.key_path');
   }
-  return parsed.version;
+
+  // Visual flow:
+  //
+  //   workspaceRoot + configured path
+  //          ↓
+  //      read raw file
+  //          ↓
+  //      parse by format
+  //          ↓
+  //      walk key_path
+  //          ↓
+  //   require one non-empty string
+  const filePath = path.resolve(workspaceRoot, configuredPath);
+  const raw = readStructuredVersionFile(filePath);
+  const parsed = parseStructuredVersionFile(raw, format, filePath);
+  const value = readStructuredFileValue(parsed, keyPath);
+  const renderedKeyPath = keyPath.join('.');
+
+  if (value === undefined) {
+    throw new Error(`version_source.type=file could not find key_path ${renderedKeyPath} in ${filePath}`);
+  }
+
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`version_source.type=file requires ${filePath} -> ${renderedKeyPath} to be a non-empty string`);
+  }
+
+  return value;
+}
+
+// Keep the file-read boundary narrow so error messages stay obvious.
+// We only special-case "missing file" here; all other read failures keep their
+// original message attached.
+function readStructuredVersionFile(filePath: string): string {
+  try {
+    return fs.readFileSync(filePath, 'utf8');
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'ENOENT') {
+      throw new Error(`version_source.type=file could not find ${filePath}`);
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`version_source.type=file failed to read ${filePath}: ${message}`);
+  }
+}
+
+// Parsing stays format-switched on purpose instead of being abstracted away.
+// Future readers should be able to answer quickly:
+//
+//   json -> JSON.parse
+//   yaml -> YAML.parse
+//   toml -> smol-toml
+function parseStructuredVersionFile(raw: string, format: string, filePath: string): unknown {
+  try {
+    if (format === fileVersionSourceFormats.json) {
+      return JSON.parse(raw) as unknown;
+    }
+    if (format === fileVersionSourceFormats.yaml) {
+      return YAML.parse(raw) as unknown;
+    }
+    if (format === fileVersionSourceFormats.toml) {
+      return parseToml(raw) as unknown;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`version_source.type=file failed to parse ${format} file ${filePath}: ${message}`);
+  }
+
+  throw new Error(`version_source.type=file does not support format ${format}`);
+}
+
+// Walk one segment at a time instead of supporting a mini query language.
+// This keeps the runtime behavior easy to predict from the config alone.
+function readStructuredFileValue(value: unknown, keyPath: string[]): unknown {
+  let current: unknown = value;
+  for (const segment of keyPath) {
+    if (!isRecord(current) || !Object.hasOwn(current, segment)) {
+      return undefined;
+    }
+    current = current[segment];
+  }
+  return current;
 }
 
 // Observe a version that some upstream system already resolved.
@@ -807,4 +893,8 @@ function escapeRegExp(value: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isNodeError(value: unknown): value is NodeJS.ErrnoException {
+  return value instanceof Error && 'code' in value;
 }

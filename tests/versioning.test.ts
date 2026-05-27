@@ -16,6 +16,7 @@ import type { RuntimeArgs, StringMap } from '../src/core/types/runtime.js';
 const fixedNow = new Date('2026-05-22T19:13:02.000Z');
 const sha = '9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c';
 const repository = 'ExampleOrg/example-service';
+const fixtureWorkspaceRoot = path.resolve(import.meta.dirname, '..');
 const tempDirs: string[] = [];
 
 interface GitHubTagListEntry {
@@ -32,10 +33,22 @@ const fixtures = {
   backendThird: fixturePath('version-backend-date-release-explicit-third.yml'),
   templateExplicit: fixturePath('version-template-explicit.yml'),
   backendAuto: fixturePath('version-backend-date-release-auto.yml'),
-  packageJson: fixturePath('version-package-json.yml'),
+  filePackageJson: fixturePath('version-package-json.yml'),
   env: fixturePath('version-env.yml'),
   gitTag: fixturePath('version-git-tag.yml'),
 };
+
+// The runtime data fixtures stay on disk because the file source must read
+// real JSON/YAML/TOML content.
+//
+// The config fixtures do not need to stay on disk. We generate them in tests so
+// the suite can cover many file-source branches without copy-pasting nearly
+// identical relay.yml files.
+interface FileVersionSourceFixture {
+  format: 'json' | 'yaml' | 'toml';
+  path: string;
+  keyPath: string[];
+}
 
 describe('versioning flexibility', () => {
   beforeEach(() => {
@@ -84,10 +97,72 @@ describe('versioning flexibility', () => {
     expect(release.release.tag).toBe('release-2026.05.22.4-9f3c1d2');
   });
 
-  it('supports package-json passthrough versioning for npm package repos', async () => {
-    const release = await normalizeWithFixture(fixtures.packageJson);
+  it('supports reading a static JSON version from package.json via the file source', async () => {
+    const release = await normalizeWithFixture(fixtures.filePackageJson);
     expect(release.release.version).toBe('2.3.4');
     expect(release.release.tag).toBe('v2.3.4');
+  });
+
+  it('supports reading nested JSON file versions', async () => {
+    const release = await normalizeWithFixture(writeTempFileVersionConfig({
+      format: 'json',
+      path: 'tests/fixtures/version-file-json/version.json',
+      keyPath: ['release', 'version'],
+    }));
+    expect(release.release.version).toBe('5.6.7');
+    expect(release.release.tag).toBe('v5.6.7');
+  });
+
+  it('supports reading YAML file versions', async () => {
+    const release = await normalizeWithFixture(writeTempFileVersionConfig({
+      format: 'yaml',
+      path: 'tests/fixtures/version-file-yaml/release.yml',
+      keyPath: ['release', 'version'],
+    }));
+    expect(release.release.version).toBe('6.7.8');
+    expect(release.release.tag).toBe('v6.7.8');
+  });
+
+  it('supports reading TOML file versions', async () => {
+    const release = await normalizeWithFixture(writeTempFileVersionConfig({
+      format: 'toml',
+      path: 'tests/fixtures/version-file-toml/pyproject.toml',
+      keyPath: ['project', 'version'],
+    }));
+    expect(release.release.version).toBe('7.8.9');
+    expect(release.release.tag).toBe('v7.8.9');
+  });
+
+  it('fails clearly when a configured version file is missing', async () => {
+    await expect(normalizeWithFixture(writeTempFileVersionConfig({
+      format: 'json',
+      path: 'tests/fixtures/version-file-missing/version.json',
+      keyPath: ['release', 'version'],
+    }))).rejects.toThrow('version_source.type=file could not find');
+  });
+
+  it('fails clearly when a configured version file cannot be parsed', async () => {
+    await expect(normalizeWithFixture(writeTempFileVersionConfig({
+      format: 'json',
+      path: 'tests/fixtures/version-file-bad-parse/version.json',
+      keyPath: ['release', 'version'],
+    }))).rejects.toThrow('version_source.type=file failed to parse json file');
+  });
+
+  it('fails clearly when key_path does not exist in the version file', async () => {
+    await expect(normalizeWithFixture(writeTempFileVersionConfig({
+      format: 'json',
+      path: 'tests/fixtures/version-file-json/version.json',
+      keyPath: ['release', 'current'],
+    }))).rejects.toThrow('version_source.type=file could not find key_path release.current');
+  });
+
+  it('fails clearly when the configured file value is not a string', async () => {
+    await expect(normalizeWithFixture(writeTempFileVersionConfig({
+      format: 'yaml',
+      path: 'tests/fixtures/version-file-non-string/release.yml',
+      keyPath: ['release', 'version'],
+    }))).rejects.toThrow('version_source.type=file requires');
   });
 
   it('supports environment-driven versioning from CI', async () => {
@@ -141,7 +216,7 @@ describe('versioning flexibility', () => {
     const repo = createTempGitRepo();
     commitFile(repo, 'README.md', 'base\n', 'chore: bootstrap');
     createTag(repo, 'v0.1.0');
-    const headSha = commitFile(repo, 'feature.txt', 'new feature\n', 'feat: add package-json version source');
+    const headSha = commitFile(repo, 'feature.txt', 'new feature\n', 'feat: add file version source');
     writeRelayConfig(repo, `version_source:\n  type: conventional-commits\n  tag_prefix: v\ntag_template: v{version}`);
 
     const release = await normalizeTempRepo(repo, path.join(repo, '.github/relay.yml'), headSha);
@@ -153,7 +228,7 @@ describe('versioning flexibility', () => {
     const repo = createTempGitRepo();
     commitFile(repo, 'README.md', 'base\n', 'chore: bootstrap');
     createTag(repo, 'v0.1.0');
-    const headSha = commitFile(repo, 'feature.txt', 'new feature\n', 'feat: add package-json version source');
+    const headSha = commitFile(repo, 'feature.txt', 'new feature\n', 'feat: add file version source');
     createTag(repo, 'v0.2.0');
     writeRelayConfig(repo, `version_source:\n  type: conventional-commits\n  tag_prefix: v\ntag_template: v{version}`);
 
@@ -166,7 +241,7 @@ describe('versioning flexibility', () => {
     const repo = createTempGitRepo();
     commitFile(repo, 'README.md', 'base\n', 'chore: bootstrap');
     createTag(repo, 'v0.1.0');
-    const headSha = commitFile(repo, 'feature.txt', 'new feature\n', 'feat: add package-json version source');
+    const headSha = commitFile(repo, 'feature.txt', 'new feature\n', 'feat: add file version source');
     runGit(repo, ['checkout', '-b', 'release-experiment', 'HEAD~1']);
     commitFile(repo, 'branch-only.txt', 'branch only\n', 'feat!: branch-only breaking change');
     createTag(repo, 'v9.0.0');
@@ -182,7 +257,7 @@ describe('versioning flexibility', () => {
     const repo = createTempGitRepo();
     commitFile(repo, 'README.md', 'base\n', 'chore: bootstrap');
     createTag(repo, 'release-0.1.0');
-    const headSha = commitFile(repo, 'feature.txt', 'new feature\n', 'feat: add package-json version source');
+    const headSha = commitFile(repo, 'feature.txt', 'new feature\n', 'feat: add file version source');
     writeRelayConfig(repo, `version_source:\n  type: conventional-commits\ntag_template: release-{version}`);
 
     const release = await normalizeTempRepo(repo, path.join(repo, '.github/relay.yml'), headSha);
@@ -194,7 +269,7 @@ describe('versioning flexibility', () => {
     const repo = createTempGitRepo();
     commitFile(repo, 'package.json', JSON.stringify({ name: '@example/component-library', version: '0.1.0' }, null, 2) + '\n', 'chore: bootstrap package');
     createTag(repo, 'v0.1.0');
-    const changeset = `---\r\n"@example/component-library": minor\r\n---\r\n\r\nAdd support for package-json version source.\r\n`;
+    const changeset = `---\r\n"@example/component-library": minor\r\n---\r\n\r\nAdd support for the file version source.\r\n`;
     const headSha = commitFile(repo, '.changeset/blue-bird.md', changeset, 'docs: add release changeset');
     writeRelayConfig(repo, `version_source:\n  type: changesets\n  directory: .changeset\n  tag_prefix: v\ntag_template: v{version}\npackage:\n  name: '@example/component-library'`);
 
@@ -219,6 +294,7 @@ async function normalizeWithFixture(configPath: string, envOverrides?: StringMap
     configPath,
     providerOverride: 'builtin:generic-env',
     dryRun: true,
+    workspaceRoot: fixtureWorkspaceRoot,
     args,
     env: {
       ...(envOverrides ?? {}),
@@ -268,6 +344,24 @@ function tagEntry(name: string, commitSha: string): GitHubTagListEntry {
 
 function fixturePath(fileName: string): string {
   return path.resolve(import.meta.dirname, 'fixtures', fileName);
+}
+
+// Build one tiny relay.yml file per test case.
+//
+// Visual model:
+//
+//   one file format fixture
+//      + one config shape
+//      ↓
+//   one focused runtime behavior test
+function writeTempFileVersionConfig(source: FileVersionSourceFixture): string {
+  const configRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'relay-file-version-config-'));
+  tempDirs.push(configRoot);
+  const configPath = path.join(configRoot, 'relay.yml');
+  const keyPathBlock = source.keyPath.map((segment) => `    - ${segment}`).join('\n');
+  const config = `api_version: 1\nproduct_name: Example Service\nrelease_profile: deploy-release\nrelease_mode: framework-managed\nprovider_plugin: builtin:generic-env\nprofile_plugin: builtin:deploy-release\ntool_plugin: null\nartifact_publishers: []\nnotifiers: []\nmetadata_enrichers: []\nplugin_allowlist: []\nallow_local_plugins: false\nstable_branches:\n  - main\nversion_source:\n  type: file\n  format: ${source.format}\n  path: ${source.path}\n  key_path:\n${keyPathBlock}\ntag_template: v{version}\nnotes_source:\n  type: static\nplugin_config: {}\n`;
+  fs.writeFileSync(configPath, config);
+  return configPath;
 }
 
 function createTempGitRepo(): string {

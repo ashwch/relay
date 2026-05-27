@@ -22,16 +22,97 @@ phase_plan  -> which plugin hooks will run and in what order
 
 ### `version-package-json.yml`
 
-Use when a package repo already stores the publishable version in
+Use when a package repo already stores a static publishable version in
 `package.json`.
 
 ```text
 package.json version
   ↓
-relay reads it directly
+relay file source reads key_path=[version]
   ↓
 tag/release identity stays aligned with npm
 ```
+
+### `version-pyproject-toml.yml`
+
+Use when a Python repo stores a static version in `pyproject.toml`.
+
+```text
+pyproject.toml project.version
+  ↓
+relay file source reads it directly
+  ↓
+tag/release identity stays aligned with that file
+```
+
+Important caveat:
+
+```text
+This example is only for static project.version values.
+```
+
+It does not cover dynamic version providers such as `setuptools_scm` or Hatch
+with `dynamic = ["version"]`.
+
+### `version-cargo-toml.yml`
+
+Use when a Rust crate stores a static version in `Cargo.toml`.
+
+```text
+Cargo.toml package.version
+  ↓
+relay file source reads it directly
+  ↓
+tag/release identity stays aligned with that file
+```
+
+Important caveat:
+
+```text
+This example does not cover Cargo workspace-inherited versions.
+```
+
+### `version-custom-yaml.yml`
+
+Use when a repo keeps its release version in a custom YAML file.
+
+```text
+.release-version.yml release.version
+  ↓
+relay file source reads it directly
+  ↓
+release identity stays aligned with that file
+```
+
+### Quick local checks for file-backed examples
+
+These commands are useful before wiring a repo into CI:
+
+```bash
+node dist/cli/main.js inspect-config --config examples/version-package-json.yml
+node dist/cli/main.js inspect-config --config examples/version-pyproject-toml.yml
+node dist/cli/main.js inspect-config --config examples/version-cargo-toml.yml
+node dist/cli/main.js inspect-config --config examples/version-custom-yaml.yml
+```
+
+What `inspect-config` proves:
+
+```text
+schema is valid
+version_source.type=file is understood
+phase plan still looks correct
+```
+
+What it does not prove:
+
+```text
+that the target file exists in your current checkout
+or
+that the key_path resolves to a real string at runtime
+```
+
+For that, run `normalize` or `finalize` from a repo checkout where the file
+really exists at the configured relative path.
 
 ### `version-env.yml`
 

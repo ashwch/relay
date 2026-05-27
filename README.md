@@ -53,8 +53,12 @@ provider -> normalize -> plan -> release record -> verify/publish -> enrich -> n
 - date / date-sha / date-time
 - date-counter / backend-date-release
 - template / explicit
-- package-json / env / git-tag
+- file / env / git-tag
 - conventional-commits / changesets
+
+`file` is the generic static file-backed option for JSON, YAML, and TOML
+version files. It does not evaluate dynamic Python versioning, Cargo workspace
+inheritance, or Go module version rules.
 
 ## Quick start
 
@@ -237,7 +241,10 @@ schemas/    JSON schemas
 
 ## Versioning examples
 
-- [`examples/version-package-json.yml`](examples/version-package-json.yml) — recommended for npm package repos, including Relay itself
+- [`examples/version-package-json.yml`](examples/version-package-json.yml) — observe a static JSON version from `package.json`
+- [`examples/version-pyproject-toml.yml`](examples/version-pyproject-toml.yml) — observe a static Python version from `pyproject.toml`
+- [`examples/version-cargo-toml.yml`](examples/version-cargo-toml.yml) — observe a static Rust version from `Cargo.toml`
+- [`examples/version-custom-yaml.yml`](examples/version-custom-yaml.yml) — observe a static version from a custom YAML file
 - [`examples/version-env.yml`](examples/version-env.yml) — use a CI-provided version
 - [`examples/version-git-tag.yml`](examples/version-git-tag.yml) — derive from the current tag
 - [`examples/version-conventional-commits.yml`](examples/version-conventional-commits.yml) — infer semver from conventional commits

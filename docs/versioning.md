@@ -63,7 +63,7 @@ Use these when another part of the repo or pipeline already knows the final
 version:
 
 - `explicit`
-- `package-json`
+- `file`
 - `env`
 - `git-tag`
 
@@ -216,22 +216,113 @@ version_source:
 
 Use when an upstream system already decided the final version string.
 
-## `package-json`
+## `file`
 
 ```yaml
 version_source:
-  type: package-json
-  path: package.json
+  type: file
+  format: toml
+  path: pyproject.toml
+  key_path:
+    - project
+    - version
 ```
 
-Example output:
+Example outputs:
 
 ```text
 2.3.4
+5.6.7
+0.8.1
 ```
 
-Use when a package repo already stores the publishable version in
-`package.json`. This is the recommended choice for Relay itself.
+Use when a repo already stores a static version in a structured file and Relay
+should observe that exact value instead of inventing another source of truth.
+
+Visual model:
+
+```text
+workspaceRoot + path
+  ↓
+parse one file by format
+  ↓
+walk key_path
+  ↓
+require one non-empty string
+  ↓
+use that exact value as the release version
+```
+
+Supported formats:
+
+- `json`
+- `yaml`
+- `toml`
+
+Common examples:
+
+```yaml
+version_source:
+  type: file
+  format: json
+  path: package.json
+  key_path:
+    - version
+```
+
+```yaml
+version_source:
+  type: file
+  format: toml
+  path: Cargo.toml
+  key_path:
+    - package
+    - version
+```
+
+```yaml
+version_source:
+  type: file
+  format: yaml
+  path: .release-version.yml
+  key_path:
+    - release
+    - version
+```
+
+Important scope rule:
+
+```text
+This source is for static file-backed versions only.
+```
+
+It does not currently support:
+
+- dynamic Python versioning such as `dynamic = ["version"]`, `setuptools_scm`, or Hatch-managed dynamic versions
+- Cargo workspace-inherited versions such as `version.workspace = true`
+- Go release versioning derived from `go.mod`
+
+When one of those dynamic cases applies, use another source of truth such as
+`git-tag`, `env`, or `explicit`.
+
+Helpful commands:
+
+```bash
+# confirm the config shape and planned versioning surface
+node dist/cli/main.js inspect-config --config examples/version-package-json.yml
+node dist/cli/main.js inspect-config --config examples/version-pyproject-toml.yml
+node dist/cli/main.js inspect-config --config examples/version-cargo-toml.yml
+node dist/cli/main.js inspect-config --config examples/version-custom-yaml.yml
+```
+
+Runtime note:
+
+```text
+The file path is resolved relative to workspaceRoot.
+```
+
+So a real `normalize` or `finalize` run must happen from a checkout where the
+configured file actually exists at that relative path.
 
 ## `env`
 
