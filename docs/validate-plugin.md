@@ -511,6 +511,7 @@ first checks:
   - did you pass the right JSON file to --plugin-config-json?
   - does config.schema.json expect the field/type you provided?
   - is manifest config_schema relative to the plugin root?
+  - if config.schema.json is a symlink, does its real target still stay inside the plugin root?
 ```
 
 Usually means:
@@ -547,6 +548,7 @@ symptom:
 first checks:
   - does manifest.hooks include the hook you asked for?
   - does entrypoint.handler exist?
+  - if entrypoint.handler is a symlink, does its real target still stay inside the plugin root?
   - does the process exit cleanly when run locally?
   - is the plugin hanging waiting for stdin or never writing stdout?
 ```

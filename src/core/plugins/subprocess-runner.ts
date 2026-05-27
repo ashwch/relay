@@ -218,8 +218,15 @@ function assertContainedPath(pluginRoot: string, candidatePath: string, manifest
   }
 
   // Lexical containment alone is not enough here.
-  // A handler path that looks like it lives inside the plugin root can still be
-  // a symlink whose real target escapes the allowlisted directory.
+  // Visual model:
+  //
+  //   plugin root says:    plugins/my-plugin/index.mjs
+  //   filesystem says:     index.mjs is a symlink
+  //   symlink target says: ../../other-project/run-me.mjs
+  //
+  // From a path-string point of view that can look safe, while from a real
+  // filesystem point of view it escapes the allowlisted plugin root. So we
+  // verify the real target too before launching the subprocess.
   if (fs.existsSync(candidatePath)) {
     const realPluginRoot = fs.realpathSync(pluginRoot);
     const realCandidatePath = fs.realpathSync(candidatePath);

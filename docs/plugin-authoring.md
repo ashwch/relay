@@ -697,6 +697,7 @@ Check:
 - manifest `hooks` includes the hook core is trying to call
 - external plugin `entrypoint.handler` exists
 - handler stays inside the plugin root
+- if the handler path is a symlink, its real target still stays inside the plugin root
 
 ### The plugin runs but fails validation
 Check:
@@ -707,6 +708,7 @@ Check:
 - response is small enough
 - no `NaN`, functions, symbols, or circular references
 - the plugin returned one JSON object, not extra banner text mixed into stdout
+- if `config_schema` is a symlink, its real target still stays inside the plugin root
 
 Best first command:
 

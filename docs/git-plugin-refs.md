@@ -463,10 +463,14 @@ So private repos need normal Git auth to work in that environment.
 
 ### npm install is plugin-local
 
-If the resolved plugin root contains `package.json`, Relay runs:
+If the resolved plugin root contains `package.json`, Relay runs one of these:
 
 ```bash
-npm install --omit=dev --ignore-scripts
+# lockfile present
+npm ci --omit=dev --ignore-scripts
+
+# no lockfile present
+npm install --omit=dev --ignore-scripts --package-lock=false
 ```
 
 inside that plugin root.
@@ -480,6 +484,13 @@ Why ignore lifecycle scripts?
 
 Because install-time scripts would run during plugin resolution, before Relay
 switches to its normal minimal runtime contract for external plugins.
+
+Why mention the two install modes again here?
+
+```text
+lockfile present -> keep the cached checkout stable with npm ci
+no lockfile      -> avoid generating a new package-lock.json in the cache
+```
 
 ### Monorepo package management is the plugin author's concern
 

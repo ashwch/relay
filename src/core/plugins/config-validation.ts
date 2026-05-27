@@ -145,8 +145,16 @@ function resolvePluginSchemaPath(pluginRoot: string, schemaRef: string, manifest
   }
 
   // Lexical containment is necessary but not sufficient.
-  // A schema path inside the plugin root can still be a symlink whose real
-  // target escapes into unrelated workspace files.
+  // Visual model:
+  //
+  //   plugin root says:    plugins/my-plugin/config.schema.json
+  //   filesystem says:     that path is a symlink
+  //   symlink target says: ../../outside.schema.json
+  //
+  // The manifest should not be able to "look inside" the plugin root while
+  // actually validating against files outside the allowlisted trust boundary.
+  // So after the lexical check passes, we also verify the real filesystem
+  // target stays inside the real plugin root.
   if (fs.existsSync(schemaPath)) {
     const realPluginRoot = fs.realpathSync(pluginRoot);
     const realSchemaPath = fs.realpathSync(schemaPath);
