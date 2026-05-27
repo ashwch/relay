@@ -141,9 +141,9 @@ version_source:
 Example outputs:
 
 ```text
-2026.05.22.1
-2026.05.22.2
-2026.05.22.3
+first release of the day  -> 2026.05.22.1
+second release of the day -> 2026.05.22.2
+third release of the day  -> 2026.05.22.3
 ```
 
 Use when several releases can happen on the same day and you want an explicit
@@ -161,9 +161,9 @@ version_source:
 Example outputs:
 
 ```text
-2026.05.22
-2026.05.22.2
-2026.05.22.3
+first release of the day  -> 2026.05.22
+second release of the day -> 2026.05.22.2
+third release of the day  -> 2026.05.22.3
 ```
 
 This is the backend-friendly date schema.

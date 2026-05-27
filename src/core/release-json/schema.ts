@@ -233,6 +233,6 @@ export function applyTagTemplate(template: string, values: TemplateValues): stri
  * Core uses the same rule during notification delivery, so the release document
  * and the runtime path tell the same story.
  */
-function readNotificationDeliveryPolicy(options: JsonObject | undefined): NotificationTarget['delivery_policy'] {
+export function readNotificationDeliveryPolicy(options: JsonObject | undefined): NotificationTarget['delivery_policy'] {
   return options?.delivery_policy === 'always' ? 'always' : 'once';
 }

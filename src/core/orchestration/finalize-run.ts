@@ -33,7 +33,7 @@ import {
 import { readJsonObjectFile } from '../io/files.js';
 import { validateNormalizedRelease } from '../release-json/invariants.js';
 import { applyMergePatch } from '../release-json/merge-patch.js';
-import type { NormalizedRelease } from '../release-json/schema.js';
+import { readNotificationDeliveryPolicy, type NormalizedRelease } from '../release-json/schema.js';
 import { resolveReleaseIdentity } from '../release-json/versioning.js';
 import type { EnvMap, RuntimeArgs, StringMap, UnknownMap } from '../types/runtime.js';
 import type { JsonObject } from '../types/json.js';
@@ -486,7 +486,7 @@ async function runConfiguredNotifications(
 	    const pluginConfig = validatePluginConfig(plugin, resolveNotifierPluginConfig(loaded, notifier));
 	    const secrets = resolvePluginSecrets(plugin.manifest, pluginConfig, env);
 	    const markerKey = buildNotificationMarkerKey(notifier.plugin);
-	    const deliveryPolicy = readDeliveryPolicy(notifier);
+	    const deliveryPolicy = readNotificationDeliveryPolicy(notifier.options);
 	    const forceNotify = readForceNotify(options.args);
 	    let notificationMarker: Awaited<ReturnType<typeof readNotificationMarker>> = null;
 
@@ -672,10 +672,6 @@ function buildNotificationDetails(payload: unknown, delivery: unknown): UnknownM
 
 function buildNotificationMarkerKey(pluginRef: string): string {
   return pluginRef.replace(/^builtin:/, '');
-}
-
-function readDeliveryPolicy(selection: { options?: JsonObject }): 'once' | 'always' {
-  return selection.options?.delivery_policy === 'always' ? 'always' : 'once';
 }
 
 function readForceNotify(args: RuntimeArgs): boolean {
