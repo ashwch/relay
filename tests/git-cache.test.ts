@@ -239,6 +239,40 @@ describe('git plugin cache', () => {
     }
   });
 
+  it('waits for an existing cache population lock', () => {
+    const cacheRoot = createTempDir('relay-git-cache-root-');
+    process.env.RELAY_GIT_CACHE_DIR = cacheRoot;
+
+    const parsed = parseGitPluginRef(repoOnlyPluginRef);
+    const lockDir = `${parsed.cacheDir}.lock`;
+    const originalMkdirSync = fs.mkdirSync.bind(fs);
+    const mkdirSyncSpy = vi.spyOn(fs, 'mkdirSync');
+    let lockAttempts = 0;
+    mkdirSyncSpy.mockImplementation(((targetPath: fs.PathLike, options?: fs.MakeDirectoryOptions & { recursive?: boolean }) => {
+      if (String(targetPath) === lockDir) {
+        lockAttempts += 1;
+        if (lockAttempts === 1) {
+          const error = new Error('lock exists') as NodeJS.ErrnoException;
+          error.code = 'EEXIST';
+          fs.mkdirSync(path.join(parsed.cacheDir, '.git'), { recursive: true });
+          throw error;
+        }
+      }
+      return originalMkdirSync(targetPath, options);
+    }) as typeof fs.mkdirSync);
+
+    const execFileSyncMock = vi.mocked(execFileSync as typeof ChildProcess.execFileSync);
+    execFileSyncMock.mockReturnValue('');
+
+    try {
+      expect(ensureGitPlugin(parsed)).toBe(fs.realpathSync(parsed.cacheDir));
+      expect(execFileSyncMock).not.toHaveBeenCalled();
+    } finally {
+      mkdirSyncSpy.mockRestore();
+      fs.rmSync(lockDir, { recursive: true, force: true });
+    }
+  });
+
   // Protect the "two Relay processes start from a cold cache at the same time"
   // case. We do not want the second process to fail just because the first one
   // finished cloning a moment earlier.
@@ -267,6 +301,9 @@ describe('git plugin cache', () => {
     expect(() => parseGitPluginRef('git:github.com/example/repo//')).toThrowError('empty plugin subdir after //');
     expect(() => parseGitPluginRef('git:../example/repo')).toThrowError('invalid git host');
     expect(() => parseGitPluginRef('git:./example/repo')).toThrowError('invalid git host');
+    expect(() => parseGitPluginRef('git:git.example.com:8443/example/repo')).toThrowError('invalid git host');
+    expect(() => parseGitPluginRef('git:github.com/example/repo@main:refs/heads/other')).toThrowError('invalid git ref');
+    expect(() => parseGitPluginRef('git:github.com/example/repo@release/*')).toThrowError('invalid git ref');
   });
 
   it('rejects repository and subdir path traversal', () => {

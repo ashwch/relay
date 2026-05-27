@@ -105,6 +105,9 @@ export function parseGitPluginRef(ref: string): GitPluginRef {
   if (lastAtIndex !== -1 && gitRef.length === 0) {
     throw new PluginLoadError(`invalid git plugin ref ${ref}: empty git ref after @`);
   }
+  if (gitRef.length > 0 && !isValidGitRef(gitRef)) {
+    throw new PluginLoadError(`invalid git plugin ref ${ref}: invalid git ref ${gitRef}`);
+  }
 
   const subdirSeparatorIndex = repoAndSubdir.indexOf('//');
   const repoAndHost = subdirSeparatorIndex === -1 ? repoAndSubdir : repoAndSubdir.slice(0, subdirSeparatorIndex);
@@ -255,23 +258,24 @@ function checkoutGitRef(parsed: GitPluginRef): void {
  * easier to recognize safely.
  */
 function cloneRepositoryIntoCache(parsed: GitPluginRef): void {
-  // Recheck the final cache path right before destructive cleanup.
-  // Another Relay process may have populated a valid clone after our caller's
-  // earlier hasClonedRepository(...) check but before we reached this point.
-  if (hasClonedRepository(parsed.cacheDir)) {
-    return;
-  }
+  withCachePopulationLock(parsed.cacheDir, () => {
+    // Recheck the final cache path after acquiring the population lock.
+    // Another Relay process may have completed the clone while we were waiting.
+    if (hasClonedRepository(parsed.cacheDir)) {
+      return;
+    }
 
-  fs.rmSync(parsed.cacheDir, { recursive: true, force: true });
+    fs.rmSync(parsed.cacheDir, { recursive: true, force: true });
 
-  const tempCloneDir = createTemporaryCloneDir(parsed.cacheDir);
-  try {
-    runGitCommand(parsed, ['clone', '--depth', '1', parsed.cloneUrl, tempCloneDir], `clone ${parsed.cloneUrl}`);
-    moveClonedRepositoryIntoCache(parsed, tempCloneDir);
-  } catch (error) {
-    fs.rmSync(tempCloneDir, { recursive: true, force: true });
-    throw error;
-  }
+    const tempCloneDir = createTemporaryCloneDir(parsed.cacheDir);
+    try {
+      runGitCommand(parsed, ['clone', '--depth', '1', parsed.cloneUrl, tempCloneDir], `clone ${parsed.cloneUrl}`);
+      moveClonedRepositoryIntoCache(parsed, tempCloneDir);
+    } catch (error) {
+      fs.rmSync(tempCloneDir, { recursive: true, force: true });
+      throw error;
+    }
+  });
 }
 
 /**
@@ -445,8 +449,51 @@ function extractFileSystemFailure(error: unknown): string {
   return 'command failed';
 }
 
+/**
+ * Validate the host portion of a git plugin ref.
+ *
+ * Important scope decision:
+ * we currently accept hostname-style values only.
+ * That keeps the cache directory mapping simple and portable because the host
+ * is also used as a filesystem path segment.
+ *
+ * Practical consequence:
+ * refs such as `git.example.com:8443/...` are rejected for now.
+ */
 function isValidGitHost(host: string): boolean {
-  return /^(?!\.{1,2}$)[A-Za-z0-9.-]+(?::\d+)?$/.test(host);
+  return /^(?!\.{1,2}$)[A-Za-z0-9.-]+$/.test(host);
+}
+
+/**
+ * Validate the user-supplied git ref before handing it to `git fetch`.
+ *
+ * First principle:
+ * Relay wants a branch name, tag name, or commit SHA here — not an arbitrary
+ * fetch refspec that can update additional refs in the cache.
+ */
+function isValidGitRef(gitRef: string): boolean {
+  if (/^[0-9a-fA-F]{7,40}$/.test(gitRef)) {
+    return true;
+  }
+
+  if (gitRef.startsWith('/') || gitRef.endsWith('/') || gitRef.endsWith('.') || gitRef.includes('//')) {
+    return false;
+  }
+  if (gitRef.includes('..') || gitRef.includes('@{')) {
+    return false;
+  }
+  for (const character of gitRef) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined) {
+      return false;
+    }
+    if (codePoint <= 0x20 || codePoint === 0x7f || '~^:?*[\\'.includes(character)) {
+      return false;
+    }
+  }
+
+  const segments = gitRef.split('/');
+  return segments.every((segment) => segment.length > 0 && !segment.startsWith('.') && !segment.endsWith('.lock'));
 }
 
 /**
@@ -511,6 +558,45 @@ function getSafeInstallEnvironment(): NodeJS.ProcessEnv {
 
 function compactEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+}
+
+/**
+ * Serialize destructive cache population for one final cache directory.
+ *
+ * Why lock at all when we already use temp clone directories?
+ * Because temp clones protect the rename step, but they do not stop one process
+ * from deleting a cache path that another process just populated a moment
+ * earlier. The lock keeps "check -> clean -> populate" as one small critical
+ * section.
+ */
+function withCachePopulationLock(cacheDir: string, action: () => void): void {
+  const lockDir = `${cacheDir}.lock`;
+  const deadline = Date.now() + 10_000;
+
+  while (true) {
+    try {
+      fs.mkdirSync(lockDir);
+      break;
+    } catch (error) {
+      if (!(error instanceof Error) || !('code' in error) || error.code !== 'EEXIST') {
+        throw error;
+      }
+      if (Date.now() >= deadline) {
+        throw new PluginLoadError(`git plugin cache lock timed out for ${cacheDir}`);
+      }
+      sleepMs(50);
+    }
+  }
+
+  try {
+    action();
+  } finally {
+    fs.rmSync(lockDir, { recursive: true, force: true });
+  }
+}
+
+function sleepMs(durationMs: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, durationMs);
 }
 
 /**

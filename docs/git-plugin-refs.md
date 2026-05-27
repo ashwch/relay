@@ -84,6 +84,20 @@ last @  -> git ref separator
 first / -> host separator
 ```
 
+Current host rule:
+
+```text
+host should be hostname-style only
+ports such as git.example.com:8443 are rejected for now
+```
+
+Why?
+
+```text
+Relay also uses host as part of the cache directory path
+so keeping host syntax filesystem-friendly keeps cache mapping predictable
+```
+
 Why split on the **last** `@`?
 
 Because a subdirectory can contain `@`, but the final `@` is the only place
@@ -254,6 +268,18 @@ one rename wins
 other process notices a valid cache already exists and reuses it
 ```
 
+Relay also uses a small per-cache lock around destructive cache population.
+
+Why?
+
+```text
+temp clones protect rename
+lock protects check -> clean -> populate
+```
+
+That avoids one process deleting a cache path that another process populated a
+moment earlier.
+
 ---
 
 ## Pinned vs unpinned refs
@@ -319,7 +345,17 @@ branch
  SHA
 ```
 
-That keeps the loader logic simple.
+One more rule matters here: Relay validates the requested ref before handing it
+to `git fetch`.
+
+Why?
+
+```text
+Relay wants a branch/tag/SHA name
+not an arbitrary fetch refspec that can update extra refs in the cache
+```
+
+That keeps the fetch surface aligned with the documented contract.
 
 ---
 
