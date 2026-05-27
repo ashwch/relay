@@ -10,8 +10,8 @@ import { runValidatePluginCommand, ValidatePluginCommandError } from './commands
 import { defaultConfigPath } from '../core/constants.js';
 import { ConfigValidationError } from '../core/config/validate-config.js';
 import { PluginAllowlistError } from '../core/plugins/allowlist.js';
+import { PluginLoadError } from '../core/plugins/errors.js';
 import { PluginManifestError } from '../core/plugins/manifest.js';
-import { PluginLoadError } from '../core/plugins/loader.js';
 import { PluginConfigValidationError } from '../core/plugins/config-validation.js';
 import { PluginResponseValidationError } from '../core/plugins/response-validation.js';
 import { ReleaseInvariantError } from '../core/release-json/invariants.js';

@@ -17,6 +17,8 @@ import { createRequire } from 'node:module';
 
 import type { LoadedConfig } from '../config/types.js';
 import { assertPluginAllowed } from './allowlist.js';
+import { PluginLoadError } from './errors.js';
+import { ensureGitPlugin, parseGitPluginRef } from './git-cache.js';
 import { readManifest, type PluginManifest } from './manifest.js';
 import { builtinHandlers, builtinManifestPaths } from './registry.js';
 import type { PluginHandler, PluginType } from './request-response.js';
@@ -57,11 +59,7 @@ export interface LoadedPlugin {
   rootDir?: string;
 }
 
-export class PluginLoadError extends Error {
-  constructor(message: string) {
-    super(message);
-  }
-}
+export { PluginLoadError } from './errors.js';
 
 /**
  * Resolve one plugin ref without requiring the caller to already know the
@@ -120,7 +118,13 @@ export function loadPluginForValidation(loadedConfig: LoadedConfig, pluginRef: s
  *
  *   builtin:... -> checked-in manifest + checked-in handler
  *   npm:...     -> allowlisted installed package + manifest + plugin root
+ *   git:...     -> allowlisted cached git checkout + manifest + plugin root
  *   path:...    -> allowlisted local path + manifest + plugin root
+ *
+ * Why add `git:` at all?
+ * Because some teams want plugin code to live in a normal Git repository
+ * without publishing an npm package and without adding ad-hoc clone steps to
+ * CI before Relay runs.
  *
  * Why stop at plugin roots instead of executing here?
  * Because loading and execution are separate trust-boundary questions.
@@ -212,6 +216,27 @@ function resolveExternalPluginLocation(loadedConfig: LoadedConfig, pluginRef: st
     const manifestPath = path.resolve(rootDir, 'plugin-manifest.json');
     if (!fs.existsSync(manifestPath)) {
       throw new PluginLoadError(`package plugin ${pluginRef} is missing plugin-manifest.json`);
+    }
+    return {
+      rootDir,
+      manifestPath,
+    };
+  }
+  if (pluginRef.startsWith('git:')) {
+    // `git:` is intentionally resolved here instead of being treated as a
+    // special execution path later.
+    //
+    // Mental model:
+    //
+    //   path:/npm:/git:
+    //      ↓
+    //   all become one explicit plugin root directory
+    //      ↓
+    //   the rest of the manifest loader stays the same
+    const rootDir = ensureGitPlugin(parseGitPluginRef(pluginRef));
+    const manifestPath = path.resolve(rootDir, 'plugin-manifest.json');
+    if (!fs.existsSync(manifestPath)) {
+      throw new PluginLoadError(`git plugin ${pluginRef}: plugin-manifest.json not found at ${rootDir}`);
     }
     return {
       rootDir,

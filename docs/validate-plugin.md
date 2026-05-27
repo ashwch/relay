@@ -72,6 +72,10 @@ resolve plugin ref
 → validate returned PluginResponse
 ```
 
+`plugin ref` here can be built-in, `path:`, `npm:`, or `git:`.
+For `git:` refs, Relay resolves the ref by cloning/fetching the plugin repo
+before manifest validation can happen.
+
 ---
 
 ## The most useful command variants
@@ -93,6 +97,17 @@ Mental model:
 manifest + config validation only
 no hook execution
 ```
+
+Important nuance for `git:` refs:
+
+```text
+--no-exec skips hook execution
+it does not skip git clone/fetch
+```
+
+Why?
+Because Relay still needs the local checkout in order to read
+`plugin-manifest.json`.
 
 ### One hook only
 

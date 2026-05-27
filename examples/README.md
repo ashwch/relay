@@ -97,6 +97,29 @@ plugin-manifest.json
 small working external plugin example
 ```
 
+### `git-plugin-notifier.yml`
+
+Use when the plugin source should stay in a Git repo and Relay should load it
+from a `git:` ref directly.
+
+```text
+relay.yml names one git: plugin ref
+  ↓
+Relay clones/fetches that repo into its cache
+  ↓
+plugin-manifest.json is loaded from the configured subdirectory
+  ↓
+normal notifier execution continues
+```
+
+This is the example to read when you want to avoid:
+
+```text
+manual CI clone steps
+or
+publishing the plugin to npm before every consumer can use it
+```
+
 Start with:
 
 - `examples/plugins/README.md`
@@ -162,6 +185,31 @@ relay observes + verifies it
   ↓
 shared artifact/enrich/notify behavior
 ```
+
+## Helpful git plugin commands
+
+Replace the placeholder `acme/relay-plugins` ref with a real reachable repo
+before running these commands.
+
+```bash
+# inspect the config surface after replacing the placeholder git: ref
+relay inspect-config --config examples/git-plugin-notifier.yml
+
+# static validation only
+relay validate-plugin git:github.com/acme/relay-plugins//slack-notify@main --no-exec
+
+# end-to-end validation
+relay validate-plugin git:github.com/acme/relay-plugins//slack-notify@main
+```
+
+Important nuance:
+
+```text
+--no-exec skips hook execution
+it does not skip git clone/fetch
+```
+
+Relay still needs the local checkout in order to read `plugin-manifest.json`.
 
 ## Real-run secrets
 
