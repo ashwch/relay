@@ -17,8 +17,8 @@
  * Without one shared home, these strings tend to drift over time.
  */
 export const defaultConfigPath = '.github/relay.yml' as const;
-export const pluginManifestApiVersion = 'release-framework.plugin/v1' as const;
-export const releaseSchemaVersion = 'release-framework.release/v1' as const;
+export const pluginManifestApiVersion = 'relay.plugin/v1' as const;
+export const releaseSchemaVersion = 'relay.release/v1' as const;
 export const maxPluginResponseBytes = 256 * 1024;
 export const maxPluginStderrBytes = 32 * 1024;
 export const defaultPluginHookTimeoutMs = 30_000;

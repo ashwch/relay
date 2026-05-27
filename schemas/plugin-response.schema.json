@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://release-framework.dev/schemas/plugin-response.schema.json",
-  "title": "Release Framework Plugin Response v1",
+  "$id": "https://relay.dev/schemas/plugin-response.schema.json",
+  "title": "Relay Plugin Response v1",
   "type": "object",
   "required": ["status", "release_patch", "outputs", "logs"],
   "properties": {

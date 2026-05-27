@@ -1,0 +1,21 @@
+api_version: 1
+product_name: Example Service
+release_profile: deploy-release
+release_mode: framework-managed
+provider_plugin: builtin:generic-env
+profile_plugin: builtin:deploy-release
+tool_plugin: null
+artifact_publishers: []
+notifiers: []
+metadata_enrichers: []
+plugin_allowlist: []
+allow_local_plugins: false
+stable_branches:
+  - main
+version_source:
+  type: env
+  key: RELAY_VERSION
+tag_template: v{version}
+notes_source:
+  type: static
+plugin_config: {}

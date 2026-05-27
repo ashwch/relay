@@ -1,6 +1,6 @@
 {
   "_comment": "Minimal external artifact verifier plugin. Demonstrates the verify hook: compares expected_asset_names from plugin config against release.artifacts in the shared release document. Returns error_message with missing asset names when verification fails. For authoring guidance, see docs/plugin-authoring.md.",
-  "api_version": "release-framework.plugin/v1",
+  "api_version": "relay.plugin/v1",
   "name": "example-verifier",
   "type": "artifact_publisher",
   "plugin_version": "1.0.0",

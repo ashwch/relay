@@ -40,7 +40,7 @@ import type { PluginHandler, PluginResponse } from '../src/core/plugins/request-
 const oversizedPayloadLength = 300_000;
 
 const baseManifest: PluginManifest = {
-  api_version: 'release-framework.plugin/v1',
+  api_version: 'relay.plugin/v1',
   name: 'test:plugin',
   type: 'provider',
   plugin_version: '1.0.0',

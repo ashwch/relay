@@ -11,10 +11,10 @@
     "SLACK_WEBHOOK_URL": "https://hooks.slack.test/services/example"
   },
   "workspace": {
-    "root": "/Users/monty/work/diversio/DiversioTeam/relay"
+    "root": "/workspace/relay"
   },
   "release": {
-    "schema_version": "release-framework.release/v1",
+    "schema_version": "relay.release/v1",
     "run": {
       "id": "2026-05-22T12:00:00.000Z-9f3c1d2",
       "dry_run": true,

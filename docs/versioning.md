@@ -15,6 +15,9 @@ Examples:
 2026.05.22-9f3c1d2
 2026.05.22.191302
 2026.05.22.4-9f3c1d2
+2.3.4
+4.5.6
+0.2.0
 ```
 
 A shared framework has to support that without forcing every repository into one
@@ -26,13 +29,56 @@ A versioning strategy answers two separate questions:
 
 ```text
 1. What should the version string look like?
-2. How do we keep it unique when more than one release happens on the same day?
+2. Where should that version come from?
+```
+
+Some repos already know the answer before Relay starts:
+
+```text
+package.json already says 2.3.4
+current tag already says v2.3.4
+CI already exported RELEASE_VERSION=2.3.4
+```
+
+Other repos want Relay to compute the answer:
+
+```text
+today's date
+existing tags
+conventional commits
+pending changesets
 ```
 
 That is why versioning now supports both:
 
-- multiple built-in version source types
-- optional counter resolution
+- direct observation of versions that already exist elsewhere
+- computed version strategies for repos that want Relay to infer the next value
+- optional counter resolution for same-day uniqueness
+
+## Two families of version sources
+
+### Observe an existing version
+
+Use these when another part of the repo or pipeline already knows the final
+version:
+
+- `explicit`
+- `package-json`
+- `env`
+- `git-tag`
+
+### Compute or infer a version
+
+Use these when Relay should derive the version itself:
+
+- `date`
+- `date-sha`
+- `date-time`
+- `date-counter`
+- `backend-date-release`
+- `template`
+- `conventional-commits`
+- `changesets`
 
 ## Supported version source types
 
@@ -169,6 +215,192 @@ version_source:
 ```
 
 Use when an upstream system already decided the final version string.
+
+## `package-json`
+
+```yaml
+version_source:
+  type: package-json
+  path: package.json
+```
+
+Example output:
+
+```text
+2.3.4
+```
+
+Use when a package repo already stores the publishable version in
+`package.json`. This is the recommended choice for Relay itself.
+
+## `env`
+
+```yaml
+version_source:
+  type: env
+  key: RELEASE_VERSION
+```
+
+Example output:
+
+```text
+3.4.5
+```
+
+Use when an upstream CI system or release tool already resolved the final
+version and exposes it as an environment variable.
+
+## `git-tag`
+
+```yaml
+version_source:
+  type: git-tag
+  pattern: '^v(?<version>.+)$'
+```
+
+The pattern must capture the version, either with `(?<version>...)` or the
+first positional capture group.
+
+Example output:
+
+```text
+4.5.6
+```
+
+Use when the current tag ref is already the release source of truth.
+
+Quick local preview:
+
+```bash
+relay normalize \
+  --config examples/version-git-tag.yml \
+  --provider builtin:generic-env \
+  --repo ExampleOrg/example-service \
+  --sha 9f3c1d2f5b1c9f7a8f4d2e1b0c6a5d4e3f2a1b0c \
+  --tag v4.5.6 \
+  --dry-run
+```
+
+## `conventional-commits`
+
+```yaml
+version_source:
+  type: conventional-commits
+  tag_prefix: v
+  initial_version: 0.1.0
+  default_increment: patch
+```
+
+Example output:
+
+```text
+0.2.0
+```
+
+Use when the repo already follows conventional commits and you want Relay to
+infer the next semver bump from git history instead of PR labels.
+
+Important tag rule:
+
+```text
+tag_template should expose {version}
+```
+
+Why?
+
+Because Relay needs future tags to remain readable as semver history.
+A tag like `v{version}` or `release-{version}` works. A tag like
+`stable-release` does not.
+
+Relay uses the latest matching semver tag that is reachable from the current
+commit, not an unrelated higher tag from another branch.
+
+Current built-in inference rules are intentionally simple:
+
+- `BREAKING CHANGE:` or `type!:` → `major`
+- `feat:` → `minor`
+- `fix:`, `perf:`, `revert:` → `patch`
+- no recognized commit type → `default_increment` or `patch`
+
+If the current commit already has the latest matching semver tag, Relay reuses
+that version instead of incrementing again on reruns.
+
+If no previous matching semver tag exists yet, Relay uses `initial_version` as
+that repository's first resolved version.
+
+Quick local preview:
+
+```bash
+relay normalize \
+  --config examples/version-conventional-commits.yml \
+  --provider builtin:generic-env \
+  --repo ExampleOrg/example-service \
+  --sha <current-sha> \
+  --branch main \
+  --dry-run
+```
+
+This source reads local git history, so the command is most useful from inside a
+real repo checkout.
+
+## `changesets`
+
+```yaml
+version_source:
+  type: changesets
+  directory: .changeset
+  package: '@example/component-library'
+  tag_prefix: v
+  initial_version: 0.1.0
+```
+
+Example output:
+
+```text
+0.2.0
+```
+
+Use when the repo already uses Changesets and Relay should infer the next
+semver bump from pending `.changeset/*.md` files for one package.
+
+Important tag rule:
+
+```text
+tag_template should expose {version}
+```
+
+For the same reason as conventional-commits: future Relay runs need to learn
+semver history back from existing tags.
+
+Relay uses the latest matching semver tag that is reachable from the current
+commit, not an unrelated higher tag from another branch.
+
+Relay takes the highest matching bump for the selected package:
+
+```text
+major > minor > patch
+```
+
+If the current commit already has the latest matching semver tag, Relay reuses
+that version instead of incrementing again.
+
+If no previous matching semver tag exists yet, Relay uses `initial_version` as
+the first resolved version.
+
+Quick local preview:
+
+```bash
+relay normalize \
+  --config examples/version-changesets.yml \
+  --provider builtin:generic-env \
+  --repo ExampleOrg/component-library \
+  --sha <current-sha> \
+  --branch main \
+  --dry-run
+```
+
+This source reads both local git history and local `.changeset/*.md` files, so
+it is also best previewed from a real repo checkout.
 
 ## Counter sources
 

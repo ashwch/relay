@@ -114,10 +114,106 @@ For example, a repo can keep the same business profile name while swapping imple
 
 ## The most important fields
 
-If you care specifically about date-based, counter-based, or backend-friendly
-version schemas, also read:
+If you care specifically about date-based, counter-based, semver-from-git,
+Changesets, or package-driven version schemas, also read:
 
 - `docs/versioning.md`
+- `examples/version-package-json.yml`
+- `examples/version-env.yml`
+- `examples/version-git-tag.yml`
+- `examples/version-conventional-commits.yml`
+- `examples/version-changesets.yml`
+
+### `version_source`
+
+This field answers a very practical question:
+
+```text
+Where should Relay learn the final version from?
+```
+
+There are two broad families:
+
+```text
+observe an existing version
+  -> package-json
+  -> env
+  -> git-tag
+  -> explicit
+
+infer or compute a version
+  -> date/date-sha/date-time
+  -> date-counter/backend-date-release
+  -> template
+  -> conventional-commits
+  -> changesets
+```
+
+Why make that distinction?
+
+Because some repos already have a source of truth:
+
+```text
+package.json already says 2.3.4
+current tag already says v2.3.4
+CI already exported RELEASE_VERSION=2.3.4
+```
+
+In those cases, Relay should usually observe that value instead of inventing a
+new one.
+
+Other repos want Relay to compute the version from git history or date rules.
+That is where the computed version sources help.
+
+Small but important rule for dynamic semver sources such as
+`conventional-commits` and `changesets`:
+
+```text
+tag_template should expose {version}
+```
+
+Why?
+
+Because Relay has to learn semver history back from previously created tags on
+later runs.
+
+Small examples:
+
+```yaml
+version_source:
+  type: package-json
+  path: package.json
+```
+
+```yaml
+version_source:
+  type: git-tag
+  pattern: '^v(?<version>.+)$'
+```
+
+```yaml
+version_source:
+  type: conventional-commits
+  tag_prefix: v
+  initial_version: 0.1.0
+```
+
+```yaml
+version_source:
+  type: changesets
+  directory: .changeset
+  package: '@example/component-library'
+  tag_prefix: v
+  initial_version: 0.1.0
+```
+
+Helpful local command:
+
+```bash
+relay inspect-config --config .github/relay.yml
+```
+
+That lets you confirm the chosen `source_type` before wiring a repo into CI.
 
 ### `release_mode`
 This is one of the most important choices.

@@ -1,4 +1,5 @@
 import type { ReleaseConfig, ReleaseMode } from '../config/types.js';
+import { versionSourceTypes } from '../version-source.js';
 import type { JsonObject } from '../types/json.js';
 import type { UnknownMap } from '../types/runtime.js';
 
@@ -46,7 +47,7 @@ export interface DeliveryRecord {
  *   links/extensions          -> extra useful context
  */
 export interface NormalizedRelease {
-  schema_version: 'release-framework.release/v1';
+  schema_version: 'relay.release/v1';
   run: {
     id: string;
     dry_run: boolean;
@@ -191,13 +192,13 @@ export function buildCoreReleaseFields(config: ReleaseConfig, input: {
  */
 export function resolveVersion(config: ReleaseConfig, date: string, shortSha: string): string {
   const sourceType = config.version_source.type;
-  if (sourceType === 'date') {
+  if (sourceType === versionSourceTypes.date) {
     return date;
   }
-  if (sourceType === 'date-sha') {
+  if (sourceType === versionSourceTypes.dateSha) {
     return `${date}-${shortSha}`;
   }
-  if (sourceType === 'explicit') {
+  if (sourceType === versionSourceTypes.explicit) {
     const explicit = config.version_source.value;
     if (typeof explicit === 'string' && explicit.length > 0) {
       return explicit;
