@@ -123,7 +123,9 @@ if @ref was provided:
   ↓
 resolve plugin root (repo root or subdirectory)
   ↓
-run npm install --omit=dev --ignore-scripts if package.json exists there
+realpath-check that the plugin root still stays inside the cloned repo
+  ↓
+install runtime dependencies with a non-dirty npm mode
   ↓
 load plugin-manifest.json from that root
 ```
@@ -349,10 +351,14 @@ A `git:` plugin cannot do that until the repo exists locally.
 
 ### Install-time script behavior
 
-Relay installs plugin-local runtime dependencies with:
+Relay installs plugin-local runtime dependencies with one of these commands:
 
 ```bash
-npm install --omit=dev --ignore-scripts
+# lockfile present
+npm ci --omit=dev --ignore-scripts
+
+# no lockfile present
+npm install --omit=dev --ignore-scripts --package-lock=false
 ```
 
 Why ignore lifecycle scripts?
@@ -361,6 +367,15 @@ Why ignore lifecycle scripts?
 plugin install happens during resolution
 resolution should not inherit arbitrary CI secrets
 ```
+
+Why disable lockfile writes in the no-lockfile case?
+
+```text
+the git cache should stay reusable across later fetch/checkout cycles
+```
+
+A generated or modified `package-lock.json` would make the cached checkout
+look dirty and could interfere with later reuse of that same cached ref.
 
 That keeps install-time subprocesses closer to Relay's normal external-plugin
 trust model, where runtime behavior is driven by an explicit request contract
@@ -419,6 +434,18 @@ plugin subdirectory
 ```
 
 but it may not escape upward out of the repository cache with `..` segments.
+
+And Relay now checks the real filesystem target too, not only the lexical path.
+
+Why?
+
+```text
+repo/subdir could be a symlink
+symlink target could point outside the cloned repo
+```
+
+So Relay resolves the real path after cloning and rejects plugin roots whose
+actual target escapes the cached repository.
 
 ---
 

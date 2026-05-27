@@ -220,16 +220,13 @@ export function ensureGitPlugin(parsed: GitPluginRef): string {
     checkoutGitRef(parsed);
   }
 
-  const rootDir = parsed.subdir
-    ? path.resolve(parsed.cacheDir, parsed.subdir)
-    : parsed.cacheDir;
-
-  if (!isPathInside(parsed.cacheDir, rootDir)) {
-    throw new PluginLoadError(`git plugin ${parsed.ref}: resolved plugin root escapes the git cache`);
-  }
+  const rootDir = resolvePluginRootDirectory(
+    parsed,
+    parsed.subdir ? path.resolve(parsed.cacheDir, parsed.subdir) : parsed.cacheDir,
+  );
 
   if (fs.existsSync(path.resolve(rootDir, 'package.json'))) {
-    runNpmCommand(parsed, ['install', '--omit=dev', '--ignore-scripts'], `install plugin dependencies in ${rootDir}`, rootDir);
+    runNpmCommand(parsed, getInstallCommandArgs(rootDir), `install plugin dependencies in ${rootDir}`, rootDir);
   }
 
   return rootDir;
@@ -379,14 +376,19 @@ function runGitCommand(parsed: GitPluginRef, args: string[], action: string): vo
 /**
  * Run one npm command inside the resolved plugin root.
  *
- * Today the install strategy is intentionally minimal:
+ * Install strategy:
  *
- *   npm install --omit=dev --ignore-scripts
+ *   lockfile present  -> npm ci --omit=dev --ignore-scripts
+ *   no lockfile       -> npm install --omit=dev --ignore-scripts --package-lock=false
  *
  * Why `--ignore-scripts`?
  * Because install-time lifecycle scripts would run before Relay applies its
  * normal minimal plugin execution environment, which could leak unrelated CI
  * secrets into plugin setup.
+ *
+ * Why avoid lockfile writes in the no-lockfile case?
+ * Because the git cache should stay reusable across fetch/checkout cycles. A
+ * generated or modified lockfile would make the cached checkout dirty.
  */
 function runNpmCommand(parsed: GitPluginRef, args: string[], action: string, cwd: string): void {
   try {
@@ -447,11 +449,47 @@ function isValidGitHost(host: string): boolean {
   return /^(?!\.{1,2}$)[A-Za-z0-9.-]+(?::\d+)?$/.test(host);
 }
 
+/**
+ * Resolve the final plugin root directory and enforce real-path containment.
+ *
+ * Why check `realpath` and not only the lexical path?
+ * Because a subdirectory inside the cloned repo can be a symlink. Lexically it
+ * may look like `repo/plugins/foo`, while the actual filesystem target points
+ * somewhere outside the checkout.
+ */
+function resolvePluginRootDirectory(parsed: GitPluginRef, candidateRootDir: string): string {
+  if (!fs.existsSync(candidateRootDir)) {
+    return candidateRootDir;
+  }
+
+  const realCacheDir = fs.realpathSync(parsed.cacheDir);
+  const realRootDir = fs.realpathSync(candidateRootDir);
+  if (!isPathInside(realCacheDir, realRootDir)) {
+    throw new PluginLoadError(`git plugin ${parsed.ref}: resolved plugin root escapes the git cache`);
+  }
+
+  return realRootDir;
+}
+
 function getRepositoryCacheLeafName(gitRef: string): string {
   if (gitRef.length === 0) {
     return 'repo';
   }
   return `ref-${createHash('sha256').update(gitRef).digest('hex').slice(0, 12)}`;
+}
+
+/**
+ * Choose the least-surprising npm install mode for a cached checkout.
+ *
+ * - lockfile present -> `npm ci` avoids rewriting lock metadata
+ * - no lockfile      -> disable package-lock generation so the cache stays clean
+ */
+function getInstallCommandArgs(rootDir: string): string[] {
+  if (fs.existsSync(path.resolve(rootDir, 'package-lock.json')) || fs.existsSync(path.resolve(rootDir, 'npm-shrinkwrap.json'))) {
+    return ['ci', '--omit=dev', '--ignore-scripts'];
+  }
+
+  return ['install', '--omit=dev', '--ignore-scripts', '--package-lock=false'];
 }
 
 function getSafeInstallEnvironment(): NodeJS.ProcessEnv {

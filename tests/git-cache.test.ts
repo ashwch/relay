@@ -94,12 +94,12 @@ describe('git plugin cache', () => {
 
     const rootDir = ensureGitPlugin(parsed);
 
-    expect(rootDir).toBe(path.join(parsed.cacheDir, 'monolith-notify'));
+    expect(rootDir).toBe(fs.realpathSync(path.join(parsed.cacheDir, 'monolith-notify')));
     expect(execFileSyncMock.mock.calls).toEqual([
       ['git', ['clone', '--depth', '1', parsed.cloneUrl, expectedCloneTarget], expect.any(Object)],
       ['git', ['-C', parsed.cacheDir, 'fetch', '--depth', '1', 'origin', 'main'], expect.any(Object)],
       ['git', ['-C', parsed.cacheDir, 'checkout', 'FETCH_HEAD'], expect.any(Object)],
-      ['npm', ['install', '--omit=dev', '--ignore-scripts'], expect.objectContaining({ cwd: rootDir, env: expect.any(Object) })],
+      ['npm', ['install', '--omit=dev', '--ignore-scripts', '--package-lock=false'], expect.objectContaining({ cwd: rootDir, env: expect.any(Object) })],
     ]);
     expect(execFileSyncMock.mock.calls.at(-1)?.[2]).toMatchObject({
       env: expect.not.objectContaining({
@@ -125,13 +125,13 @@ describe('git plugin cache', () => {
     execFileSyncMock.mockReturnValue('');
 
     try {
-      expect(ensureGitPlugin(parsed)).toBe(rootDir);
+      expect(ensureGitPlugin(parsed)).toBe(fs.realpathSync(rootDir));
       expect(execFileSyncMock).toHaveBeenCalledTimes(1);
       expect(execFileSyncMock).toHaveBeenCalledWith(
         'npm',
-        ['install', '--omit=dev', '--ignore-scripts'],
+        ['install', '--omit=dev', '--ignore-scripts', '--package-lock=false'],
         expect.objectContaining({
-          cwd: rootDir,
+          cwd: fs.realpathSync(rootDir),
           env: expect.not.objectContaining({ TOP_SECRET: 'do-not-forward' }),
         }),
       );
@@ -142,6 +142,43 @@ describe('git plugin cache', () => {
         process.env.TOP_SECRET = originalTopSecret;
       }
     }
+  });
+
+  it('uses npm ci when a lockfile exists', () => {
+    const cacheRoot = createTempDir('relay-git-cache-root-');
+    process.env.RELAY_GIT_CACHE_DIR = cacheRoot;
+
+    const parsed = parseGitPluginRef(unpinnedPluginRef);
+    const rootDir = path.join(parsed.cacheDir, 'monolith-notify');
+    fs.mkdirSync(path.join(parsed.cacheDir, '.git'), { recursive: true });
+    fs.mkdirSync(rootDir, { recursive: true });
+    fs.writeFileSync(path.join(rootDir, 'package.json'), '{"name":"monolith-notify"}\n', 'utf8');
+    fs.writeFileSync(path.join(rootDir, 'package-lock.json'), '{"name":"monolith-notify","lockfileVersion":3}\n', 'utf8');
+
+    const execFileSyncMock = vi.mocked(execFileSync as typeof ChildProcess.execFileSync);
+    execFileSyncMock.mockReturnValue('');
+
+    expect(ensureGitPlugin(parsed)).toBe(fs.realpathSync(rootDir));
+    expect(execFileSyncMock).toHaveBeenCalledWith(
+      'npm',
+      ['ci', '--omit=dev', '--ignore-scripts'],
+      expect.objectContaining({ cwd: fs.realpathSync(rootDir) }),
+    );
+  });
+
+  it('rejects symlinked plugin roots that escape the cache', () => {
+    const cacheRoot = createTempDir('relay-git-cache-root-');
+    process.env.RELAY_GIT_CACHE_DIR = cacheRoot;
+
+    const parsed = parseGitPluginRef(unpinnedPluginRef);
+    const escapedRoot = createTempDir('relay-plugin-escaped-root-');
+    const pluginRoot = path.join(parsed.cacheDir, 'monolith-notify');
+    fs.mkdirSync(path.join(parsed.cacheDir, '.git'), { recursive: true });
+    fs.mkdirSync(escapedRoot, { recursive: true });
+    fs.writeFileSync(path.join(escapedRoot, 'package.json'), '{"name":"escaped-plugin"}\n', 'utf8');
+    fs.symlinkSync(escapedRoot, pluginRoot, 'dir');
+
+    expect(() => ensureGitPlugin(parsed)).toThrowError('resolved plugin root escapes the git cache');
   });
 
   it('reclones a broken cache directory before use', () => {
@@ -161,7 +198,7 @@ describe('git plugin cache', () => {
       return '';
     });
 
-    expect(ensureGitPlugin(parsed)).toBe(parsed.cacheDir);
+    expect(ensureGitPlugin(parsed)).toBe(fs.realpathSync(parsed.cacheDir));
     expect(execFileSyncMock).toHaveBeenCalledWith(
       'git',
       ['clone', '--depth', '1', parsed.cloneUrl, expect.stringMatching(new RegExp(`^${escapeForRegExp(parsed.cacheDir)}\\.tmp-`))],
@@ -195,7 +232,7 @@ describe('git plugin cache', () => {
     execFileSyncMock.mockReturnValue('');
 
     try {
-      expect(ensureGitPlugin(parsed)).toBe(parsed.cacheDir);
+      expect(ensureGitPlugin(parsed)).toBe(fs.realpathSync(parsed.cacheDir));
       expect(execFileSyncMock).not.toHaveBeenCalled();
     } finally {
       existsSyncSpy.mockRestore();
@@ -220,7 +257,7 @@ describe('git plugin cache', () => {
       return '';
     });
 
-    expect(ensureGitPlugin(parsed)).toBe(parsed.cacheDir);
+    expect(ensureGitPlugin(parsed)).toBe(fs.realpathSync(parsed.cacheDir));
     expect(fs.existsSync(path.join(parsed.cacheDir, '.git'))).toBe(true);
   });
 
