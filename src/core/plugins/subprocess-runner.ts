@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -214,6 +215,18 @@ function assertContainedPath(pluginRoot: string, candidatePath: string, manifest
   const relativePath = path.relative(pluginRoot, candidatePath);
   if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
     throw new ExternalPluginExecutionError(`plugin ${manifest.name} handler must stay inside plugin root`);
+  }
+
+  // Lexical containment alone is not enough here.
+  // A handler path that looks like it lives inside the plugin root can still be
+  // a symlink whose real target escapes the allowlisted directory.
+  if (fs.existsSync(candidatePath)) {
+    const realPluginRoot = fs.realpathSync(pluginRoot);
+    const realCandidatePath = fs.realpathSync(candidatePath);
+    const realRelativePath = path.relative(realPluginRoot, realCandidatePath);
+    if (realRelativePath.startsWith('..') || path.isAbsolute(realRelativePath)) {
+      throw new ExternalPluginExecutionError(`plugin ${manifest.name} handler must stay inside plugin root`);
+    }
   }
 }
 

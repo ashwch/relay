@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import type { ValidateFunction } from 'ajv';
@@ -142,5 +143,21 @@ function resolvePluginSchemaPath(pluginRoot: string, schemaRef: string, manifest
       `config_schema=${schemaRef}`,
     ]);
   }
+
+  // Lexical containment is necessary but not sufficient.
+  // A schema path inside the plugin root can still be a symlink whose real
+  // target escapes into unrelated workspace files.
+  if (fs.existsSync(schemaPath)) {
+    const realPluginRoot = fs.realpathSync(pluginRoot);
+    const realSchemaPath = fs.realpathSync(schemaPath);
+    const realRelativePath = path.relative(realPluginRoot, realSchemaPath);
+    if (realRelativePath.startsWith('..') || path.isAbsolute(realRelativePath)) {
+      throw new PluginConfigValidationError(`plugin ${manifest.name} config_schema must stay inside plugin root`, [
+        `plugin_root=${pluginRoot}`,
+        `config_schema=${schemaRef}`,
+      ]);
+    }
+  }
+
   return schemaPath;
 }
