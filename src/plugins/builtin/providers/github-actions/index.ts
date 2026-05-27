@@ -106,6 +106,7 @@ export const githubActionsProvider: PluginHandler = {
       },
       sourceExtras: eventName === 'repository_dispatch' ? { upstream_ci_system: dispatchPayload.ci_system ?? null } : {},
       linkExtras: dispatchPayload.links ?? {},
+      workspaceRoot: request.workspace.root,
     });
 
     return okResponse(release, {}, 'normalized GitHub Actions context');

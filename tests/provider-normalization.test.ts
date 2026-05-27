@@ -87,6 +87,7 @@ describe('provider normalization', () => {
       providerPlugin: 'builtin:generic-env',
       trigger: 'test',
       now: fixedNow,
+      workspaceRoot: process.cwd(),
     });
 
     expect(fields.notifications.targets[0]).toMatchObject({

@@ -515,6 +515,7 @@ function buildSampleReleaseForHook(hook: HookName): ReturnType<typeof createBase
       dryRun: true,
       workflowUrl: sampleWorkflowUrl,
       completionStatus: 'completed',
+      workspaceRoot: process.cwd(),
     });
 }
 

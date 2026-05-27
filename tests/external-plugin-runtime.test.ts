@@ -297,7 +297,7 @@ function createManifest(
     type,
     plugin_version: '1.0.0',
     plugin_api_version: 1,
-    framework_version_range: '^0.2.0',
+    framework_version_range: '^0.1.0',
     entrypoint: {
       kind: 'module',
       handler: 'index.mjs',
@@ -398,5 +398,6 @@ function createTestRelease(): ReturnType<typeof createBaseReleaseDocument> {
     dryRun: true,
     workflowUrl: null,
     completionStatus: 'completed',
+    workspaceRoot: process.cwd(),
   });
 }

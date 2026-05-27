@@ -6,7 +6,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { normalizeReleaseDocument } from '../src/core/orchestration/finalize-run.js';
+import { resolveVersion } from '../src/core/release-json/schema.js';
 import type { NormalizedRelease } from '../src/core/release-json/schema.js';
+import type { ReleaseConfig } from '../src/core/config/types.js';
 import type { RuntimeArgs, StringMap } from '../src/core/types/runtime.js';
 
 /**
@@ -276,6 +278,192 @@ describe('versioning flexibility', () => {
     const release = await normalizeTempRepo(repo, path.join(repo, '.github/relay.yml'), headSha);
     expect(release.release.version).toBe('0.2.0');
     expect(release.release.tag).toBe('v0.2.0');
+  });
+});
+
+describe('resolveVersion (initial provider normalization — synchronous types only)', () => {
+  const baseConfig: ReleaseConfig = {
+    api_version: 1,
+    product_name: 'Test',
+    release_profile: 'deploy-release',
+    release_mode: 'framework-managed',
+    provider_plugin: 'builtin:generic-env',
+    profile_plugin: 'builtin:deploy-release',
+    stable_branches: ['main'],
+    tag_template: 'v{version}',
+    notes_source: { type: 'static' },
+    version_source: { type: 'date-sha' },
+    plugin_config: {},
+  };
+
+  it('returns the correct date-based version', () => {
+    const version = resolveVersion(
+      { ...baseConfig, version_source: { type: 'date' } },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    );
+    expect(version).toBe('2026.05.22');
+  });
+
+  it('returns the correct date-sha version', () => {
+    const version = resolveVersion(
+      { ...baseConfig, version_source: { type: 'date-sha' } },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    );
+    expect(version).toBe('2026.05.22-9f3c1d2');
+  });
+
+  it('returns the correct explicit version', () => {
+    const version = resolveVersion(
+      { ...baseConfig, version_source: { type: 'explicit', value: '7.8.9' } },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    );
+    expect(version).toBe('7.8.9');
+  });
+
+  it('reads version from a JSON file (file source)', () => {
+    const version = resolveVersion(
+      {
+        ...baseConfig,
+        version_source: {
+          type: 'file', format: 'json',
+          path: fixtureRelativePath('version-package-json/package.json'),
+          key_path: ['version'],
+        },
+      },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    );
+    expect(version).toBe('2.3.4');
+  });
+
+  it('reads version from a YAML file (file source)', () => {
+    const version = resolveVersion(
+      {
+        ...baseConfig,
+        version_source: {
+          type: 'file', format: 'yaml',
+          path: fixtureRelativePath('version-file-yaml/release.yml'),
+          key_path: ['release', 'version'],
+        },
+      },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    );
+    expect(version).toBe('6.7.8');
+  });
+
+  it('reads version from a TOML file (file source)', () => {
+    const version = resolveVersion(
+      {
+        ...baseConfig,
+        version_source: {
+          type: 'file', format: 'toml',
+          path: fixtureRelativePath('version-file-toml/pyproject.toml'),
+          key_path: ['project', 'version'],
+        },
+      },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    );
+    expect(version).toBe('7.8.9');
+  });
+
+  it('throws when the configured version file is missing', () => {
+    expect(() => resolveVersion(
+      {
+        ...baseConfig,
+        version_source: {
+          type: 'file', format: 'json',
+          path: fixtureRelativePath('version-file-missing/version.json'),
+          key_path: ['release', 'version'],
+        },
+      },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    )).toThrow('version_source.type=file could not find');
+  });
+
+  it('throws when the configured file cannot be parsed', () => {
+    expect(() => resolveVersion(
+      {
+        ...baseConfig,
+        version_source: {
+          type: 'file', format: 'json',
+          path: fixtureRelativePath('version-file-bad-parse/version.json'),
+          key_path: ['release', 'version'],
+        },
+      },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    )).toThrow('version_source.type=file failed to parse');
+  });
+
+  it('falls back to date-sha for env type (needs runtime env context)', () => {
+    const version = resolveVersion(
+      {
+        ...baseConfig,
+        version_source: { type: 'env', key: 'RELAY_TEST_RESOLVE_VERSION' },
+      },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    );
+    expect(version).toBe('2026.05.22-9f3c1d2');
+  });
+
+  it('resolves template-driven versions', () => {
+    const version = resolveVersion(
+      {
+        ...baseConfig,
+        version_source: { type: 'template', template: 'rel-{date}.{short_sha}' },
+      },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    );
+    expect(version).toBe('rel-2026.05.22.9f3c1d2');
+  });
+
+  it('rejects template that references {version}', () => {
+    expect(() => resolveVersion(
+      {
+        ...baseConfig,
+        version_source: { type: 'template', template: 'v{version}' },
+      },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    )).toThrow('version_source.type=template may not reference {version}');
+  });
+
+  it('falls back to date-sha for types that require async resolution (git-tag)', () => {
+    const version = resolveVersion(
+      {
+        ...baseConfig,
+        version_source: { type: 'git-tag', tag_prefix: 'v' },
+      },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    );
+    expect(version).toBe('2026.05.22-9f3c1d2');
+  });
+
+  it('falls back to date-sha for types that require async resolution (conventional-commits)', () => {
+    const version = resolveVersion(
+      {
+        ...baseConfig,
+        version_source: { type: 'conventional-commits' },
+      },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    );
+    expect(version).toBe('2026.05.22-9f3c1d2');
+  });
+
+  it('falls back to date-sha for types that require async resolution (changesets)', () => {
+    const version = resolveVersion(
+      {
+        ...baseConfig,
+        version_source: { type: 'changesets' },
+      },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    );
+    expect(version).toBe('2026.05.22-9f3c1d2');
+  });
+
+  it('falls back to date-sha when no type is specified', () => {
+    const version = resolveVersion(
+      { ...baseConfig, version_source: { type: '' as 'date-sha' } },
+      '2026.05.22', '9f3c1d2', fixtureWorkspaceRoot,
+    );
+    expect(version).toBe('2026.05.22-9f3c1d2');
   });
 });
 

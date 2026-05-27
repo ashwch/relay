@@ -39,6 +39,7 @@ export const circleCiProvider: PluginHandler = {
       sourceExtras: {
         vcs_type: request.inputs.env.CIRCLE_REPOSITORY_URL?.includes('github.com') ? 'github' : 'unknown',
       },
+      workspaceRoot: request.workspace.root,
     });
 
     return okResponse(release, {}, 'normalized CircleCI context');

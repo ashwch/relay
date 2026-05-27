@@ -26,6 +26,7 @@ export interface BaseProviderInput {
   providerExtension?: UnknownMap;
   sourceExtras?: UnknownMap;
   linkExtras?: UnknownMap;
+  workspaceRoot: string;
 }
 
 export function createBaseReleaseDocument(config: ReleaseConfig, input: BaseProviderInput): NormalizedRelease {
@@ -43,6 +44,7 @@ export function createBaseReleaseDocument(config: ReleaseConfig, input: BaseProv
     providerPlugin: input.providerPlugin,
     trigger: input.trigger,
     now,
+    workspaceRoot: input.workspaceRoot,
   });
 
   return {

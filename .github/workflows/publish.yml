@@ -1,12 +1,13 @@
 name: Publish
 on:
   push:
-    tags: ['v*']
+    branches: [main]
 jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,6 +19,6 @@ jobs:
       - run: npm config set //registry.npmjs.org/:_authToken $NPM_TOKEN && npm publish --access public
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - run: node dist/cli/main.js finalize --config .github/relay.yml --provider builtin:github-actions --tag "${{ github.ref_name }}"
+      - run: node dist/cli/main.js finalize --config .github/relay.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

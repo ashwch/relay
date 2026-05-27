@@ -58,6 +58,7 @@ export const genericEnvProvider: PluginHandler = {
       providerExtension: {
         input_args: filterUndefinedValues(request.inputs.args),
       },
+      workspaceRoot: request.workspace.root,
     });
 
     return okResponse(release, {}, 'normalized generic env context');

@@ -8,7 +8,8 @@ tool_plugin: null
 artifact_publishers:
   - plugin: builtin:npm-registry-verify
 notifiers: []
-metadata_enrichers: []
+metadata_enrichers:
+  - plugin: builtin:github-associated-prs
 plugin_allowlist: []
 allow_local_plugins: false
 stable_branches: [main]

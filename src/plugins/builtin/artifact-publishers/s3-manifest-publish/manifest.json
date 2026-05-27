@@ -4,7 +4,7 @@
   "type": "artifact_publisher",
   "plugin_version": "1.0.0",
   "plugin_api_version": 1,
-  "framework_version_range": "^0.2.0",
+  "framework_version_range": "^0.1.0",
   "entrypoint": {
     "kind": "builtin",
     "handler": "artifact_publishers.s3_manifest_publish"
