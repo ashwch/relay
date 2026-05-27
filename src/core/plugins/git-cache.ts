@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -131,7 +132,7 @@ export function parseGitPluginRef(ref: string): GitPluginRef {
   if (repoPath.startsWith('/') || repoPath.endsWith('/')) {
     throw new PluginLoadError(`invalid git plugin ref ${ref}: repository path must not start or end with /`);
   }
-  if (host.includes('\\') || host.includes('/')) {
+  if (!isValidGitHost(host)) {
     throw new PluginLoadError(`invalid git plugin ref ${ref}: invalid git host ${host}`);
   }
   assertSafeRelativePath(ref, 'repository path', repoPath);
@@ -158,12 +159,18 @@ export function parseGitPluginRef(ref: string): GitPluginRef {
  *   cache root
  *     ↓
  *   <host>/<repoPath>
+ *     ↓
+ *   repo | ref-<hash>
  *
- * That means different plugin refs that point at different subdirectories or
- * refs inside the same repository still share one cloned repository cache.
+ * Unpinned refs use `repo`.
+ * Pinned refs use a ref-derived hash segment.
+ *
+ * Why include the git ref in the cache key?
+ * Because a checkout for `@main` and a checkout for `@v1.2.3` must not mutate
+ * the same working tree underneath two different Relay runs.
  */
 export function getGitCacheDir(parsed: GitPluginRef): string {
-  return path.resolve(getGitCacheRoot(), parsed.host, parsed.repoPath);
+  return path.resolve(getGitCacheRoot(), parsed.host, parsed.repoPath, getRepositoryCacheLeafName(parsed.gitRef));
 }
 
 /**
@@ -190,10 +197,15 @@ export function getGitCacheDir(parsed: GitPluginRef): string {
  * Because the final cache path should mean "ready to use" as much as possible.
  * A failed or concurrent clone should not leave behind a misleading half-clone
  * that future runs mistake for a healthy repository.
-  *
+ *
  * Why install dependencies inside the plugin root?
  * Because external plugins run from their own directory. Relay should not rely
  * on the caller's repo-level node_modules to satisfy a plugin's runtime needs.
+ *
+ * Security rule:
+ * plugin dependency installation should not inherit the full Relay process
+ * environment. The runtime later executes plugins with a minimal request-driven
+ * contract, so install-time subprocesses should also avoid ambient CI secrets.
  */
 export function ensureGitPlugin(parsed: GitPluginRef): string {
   fs.mkdirSync(path.dirname(parsed.cacheDir), { recursive: true });
@@ -217,7 +229,7 @@ export function ensureGitPlugin(parsed: GitPluginRef): string {
   }
 
   if (fs.existsSync(path.resolve(rootDir, 'package.json'))) {
-    runNpmCommand(parsed, ['install', '--omit=dev'], `install plugin dependencies in ${rootDir}`, rootDir);
+    runNpmCommand(parsed, ['install', '--omit=dev', '--ignore-scripts'], `install plugin dependencies in ${rootDir}`, rootDir);
   }
 
   return rootDir;
@@ -246,6 +258,13 @@ function checkoutGitRef(parsed: GitPluginRef): void {
  * easier to recognize safely.
  */
 function cloneRepositoryIntoCache(parsed: GitPluginRef): void {
+  // Recheck the final cache path right before destructive cleanup.
+  // Another Relay process may have populated a valid clone after our caller's
+  // earlier hasClonedRepository(...) check but before we reached this point.
+  if (hasClonedRepository(parsed.cacheDir)) {
+    return;
+  }
+
   fs.rmSync(parsed.cacheDir, { recursive: true, force: true });
 
   const tempCloneDir = createTemporaryCloneDir(parsed.cacheDir);
@@ -362,16 +381,19 @@ function runGitCommand(parsed: GitPluginRef, args: string[], action: string): vo
  *
  * Today the install strategy is intentionally minimal:
  *
- *   npm install --omit=dev
+ *   npm install --omit=dev --ignore-scripts
  *
- * That matches the current Node/npm assumptions in Relay and keeps plugin
- * execution focused on runtime dependencies only.
+ * Why `--ignore-scripts`?
+ * Because install-time lifecycle scripts would run before Relay applies its
+ * normal minimal plugin execution environment, which could leak unrelated CI
+ * secrets into plugin setup.
  */
 function runNpmCommand(parsed: GitPluginRef, args: string[], action: string, cwd: string): void {
   try {
     execFileSync('npm', args, {
       cwd,
       encoding: 'utf8',
+      env: getSafeInstallEnvironment(),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch (error) {
@@ -419,6 +441,38 @@ function extractFileSystemFailure(error: unknown): string {
     return error.message.trim();
   }
   return 'command failed';
+}
+
+function isValidGitHost(host: string): boolean {
+  return /^(?!\.{1,2}$)[A-Za-z0-9.-]+(?::\d+)?$/.test(host);
+}
+
+function getRepositoryCacheLeafName(gitRef: string): string {
+  if (gitRef.length === 0) {
+    return 'repo';
+  }
+  return `ref-${createHash('sha256').update(gitRef).digest('hex').slice(0, 12)}`;
+}
+
+function getSafeInstallEnvironment(): NodeJS.ProcessEnv {
+  return compactEnvironment({
+    CI: process.env.CI,
+    COMSPEC: process.env.COMSPEC,
+    HOME: process.env.HOME,
+    NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS,
+    PATH: process.env.PATH,
+    SystemRoot: process.env.SystemRoot,
+    TEMP: process.env.TEMP,
+    TMP: process.env.TMP,
+    TMPDIR: process.env.TMPDIR,
+    USERPROFILE: process.env.USERPROFILE,
+    npm_config_cache: process.env.npm_config_cache,
+    npm_config_userconfig: process.env.npm_config_userconfig,
+  });
+}
+
+function compactEnvironment(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
 }
 
 /**

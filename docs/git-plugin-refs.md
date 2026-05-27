@@ -123,7 +123,7 @@ if @ref was provided:
   ↓
 resolve plugin root (repo root or subdirectory)
   ↓
-run npm install --omit=dev if package.json exists there
+run npm install --omit=dev --ignore-scripts if package.json exists there
   ↓
 load plugin-manifest.json from that root
 ```
@@ -200,33 +200,40 @@ Visual model:
 cache root
   ↓
 <host>/<repoPath>
+  ↓
+repo | ref-<hash>
 ```
 
-So this ref:
+So these refs:
 
 ```text
+git:github.com/acme/relay-plugins//slack-notify
 git:github.com/acme/relay-plugins//slack-notify@main
+git:github.com/acme/relay-plugins//slack-notify@v1.2.3
 ```
 
-lands in a cache directory like:
+land in cache directories shaped like:
 
 ```text
-~/.relay/cache/git/github.com/acme/relay-plugins
+~/.relay/cache/git/github.com/acme/relay-plugins/repo
+~/.relay/cache/git/github.com/acme/relay-plugins/ref-<hash-of-main>
+~/.relay/cache/git/github.com/acme/relay-plugins/ref-<hash-of-v1.2.3>
 ```
 
-and then Relay resolves the plugin root inside that repo.
-
-Why cache by repository instead of by full ref string?
-
-Because many plugin refs can point into the same repository:
+Why include the ref in the cache key for pinned refs?
 
 ```text
-same repo
-  -> different subdirs
-  -> different branches/tags/SHAs
+same repo + different pinned refs
+  should not share one mutable checkout
 ```
 
-One repository cache keeps that behavior predictable.
+Otherwise one Relay process could check out `@main` while another expected
+`@v1.2.3`, and both would be mutating the same working tree.
+
+Why keep one shared `repo` cache for the unpinned case?
+
+Because the ref-less form is already a local-dev convenience and does not claim
+strong pinning semantics.
 
 Why clone into a temp sibling first instead of straight into the final cache
 path?
@@ -340,6 +347,25 @@ Why?
 Because Relay still has to load the manifest and validate the plugin contract.
 A `git:` plugin cannot do that until the repo exists locally.
 
+### Install-time script behavior
+
+Relay installs plugin-local runtime dependencies with:
+
+```bash
+npm install --omit=dev --ignore-scripts
+```
+
+Why ignore lifecycle scripts?
+
+```text
+plugin install happens during resolution
+resolution should not inherit arbitrary CI secrets
+```
+
+That keeps install-time subprocesses closer to Relay's normal external-plugin
+trust model, where runtime behavior is driven by an explicit request contract
+instead of ambient process environment.
+
 ### End-to-end validation
 
 ```bash
@@ -413,7 +439,7 @@ So private repos need normal Git auth to work in that environment.
 If the resolved plugin root contains `package.json`, Relay runs:
 
 ```bash
-npm install --omit=dev
+npm install --omit=dev --ignore-scripts
 ```
 
 inside that plugin root.
@@ -422,6 +448,11 @@ Why there?
 
 Because the plugin executes from its own directory. Relay does not assume the
 caller repo's `node_modules` should satisfy plugin runtime dependencies.
+
+Why ignore lifecycle scripts?
+
+Because install-time scripts would run during plugin resolution, before Relay
+switches to its normal minimal runtime contract for external plugins.
 
 ### Monorepo package management is the plugin author's concern
 

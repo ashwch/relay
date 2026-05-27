@@ -44,6 +44,17 @@ describe('git plugin cache', () => {
       cloneUrl: 'https://github.com/ashwch/relay-plugins.git',
     });
     expect(parsed.cacheDir).toBe(getGitCacheDir(parsed));
+    expect(parsed.cacheDir).toContain(path.join('github.com', 'ashwch', 'relay-plugins', 'ref-'));
+  });
+
+  it('uses separate cache directories for different pinned refs from the same repo', () => {
+    const mainRef = parseGitPluginRef(repoOnlyPluginRef + '@main');
+    const tagRef = parseGitPluginRef(repoOnlyPluginRef + '@v1.2.3');
+    const unpinnedRef = parseGitPluginRef(repoOnlyPluginRef);
+
+    expect(mainRef.cacheDir).not.toBe(tagRef.cacheDir);
+    expect(mainRef.cacheDir).not.toBe(unpinnedRef.cacheDir);
+    expect(unpinnedRef.cacheDir).toMatch(new RegExp(`${escapeForRegExp(path.join('ashwch', 'relay-plugins', 'repo'))}$`));
   });
 
   it('parses edge-case git plugin refs', () => {
@@ -60,7 +71,7 @@ describe('git plugin cache', () => {
 
     const parsed = parseGitPluginRef('git:github.com/example/repo');
 
-    expect(parsed.cacheDir).toBe(path.resolve(cacheRoot, 'github.com', 'example/repo'));
+    expect(parsed.cacheDir).toBe(path.resolve(cacheRoot, 'github.com', 'example/repo', 'repo'));
   });
 
   it('clones, checks out a pinned ref, and installs dependencies', () => {
@@ -88,8 +99,13 @@ describe('git plugin cache', () => {
       ['git', ['clone', '--depth', '1', parsed.cloneUrl, expectedCloneTarget], expect.any(Object)],
       ['git', ['-C', parsed.cacheDir, 'fetch', '--depth', '1', 'origin', 'main'], expect.any(Object)],
       ['git', ['-C', parsed.cacheDir, 'checkout', 'FETCH_HEAD'], expect.any(Object)],
-      ['npm', ['install', '--omit=dev'], expect.objectContaining({ cwd: rootDir })],
+      ['npm', ['install', '--omit=dev', '--ignore-scripts'], expect.objectContaining({ cwd: rootDir, env: expect.any(Object) })],
     ]);
+    expect(execFileSyncMock.mock.calls.at(-1)?.[2]).toMatchObject({
+      env: expect.not.objectContaining({
+        TOP_SECRET: expect.anything(),
+      }),
+    });
   });
 
   it('reuses an unpinned cache hit without fetching', () => {
@@ -102,12 +118,30 @@ describe('git plugin cache', () => {
     fs.mkdirSync(rootDir, { recursive: true });
     fs.writeFileSync(path.join(rootDir, 'package.json'), '{"name":"monolith-notify"}\n', 'utf8');
 
+    const originalTopSecret = process.env.TOP_SECRET;
+    process.env.TOP_SECRET = 'do-not-forward';
+
     const execFileSyncMock = vi.mocked(execFileSync as typeof ChildProcess.execFileSync);
     execFileSyncMock.mockReturnValue('');
 
-    expect(ensureGitPlugin(parsed)).toBe(rootDir);
-    expect(execFileSyncMock).toHaveBeenCalledTimes(1);
-    expect(execFileSyncMock).toHaveBeenCalledWith('npm', ['install', '--omit=dev'], expect.objectContaining({ cwd: rootDir }));
+    try {
+      expect(ensureGitPlugin(parsed)).toBe(rootDir);
+      expect(execFileSyncMock).toHaveBeenCalledTimes(1);
+      expect(execFileSyncMock).toHaveBeenCalledWith(
+        'npm',
+        ['install', '--omit=dev', '--ignore-scripts'],
+        expect.objectContaining({
+          cwd: rootDir,
+          env: expect.not.objectContaining({ TOP_SECRET: 'do-not-forward' }),
+        }),
+      );
+    } finally {
+      if (originalTopSecret === undefined) {
+        delete process.env.TOP_SECRET;
+      } else {
+        process.env.TOP_SECRET = originalTopSecret;
+      }
+    }
   });
 
   it('reclones a broken cache directory before use', () => {
@@ -136,6 +170,38 @@ describe('git plugin cache', () => {
     expect(fs.existsSync(path.join(parsed.cacheDir, 'partial.txt'))).toBe(false);
   });
 
+  it('reuses a cache that appears after the initial existence check but before cleanup', () => {
+    const cacheRoot = createTempDir('relay-git-cache-root-');
+    process.env.RELAY_GIT_CACHE_DIR = cacheRoot;
+
+    const parsed = parseGitPluginRef(repoOnlyPluginRef);
+    fs.mkdirSync(parsed.cacheDir, { recursive: true });
+
+    const originalExistsSync = fs.existsSync.bind(fs);
+    const existsSyncSpy = vi.spyOn(fs, 'existsSync');
+    let gitDirChecks = 0;
+    existsSyncSpy.mockImplementation((targetPath) => {
+      const normalizedTargetPath = path.resolve(String(targetPath));
+      if (normalizedTargetPath === path.resolve(parsed.cacheDir, '.git')) {
+        gitDirChecks += 1;
+        if (gitDirChecks === 2) {
+          fs.mkdirSync(path.join(parsed.cacheDir, '.git'), { recursive: true });
+        }
+      }
+      return originalExistsSync(targetPath);
+    });
+
+    const execFileSyncMock = vi.mocked(execFileSync as typeof ChildProcess.execFileSync);
+    execFileSyncMock.mockReturnValue('');
+
+    try {
+      expect(ensureGitPlugin(parsed)).toBe(parsed.cacheDir);
+      expect(execFileSyncMock).not.toHaveBeenCalled();
+    } finally {
+      existsSyncSpy.mockRestore();
+    }
+  });
+
   // Protect the "two Relay processes start from a cold cache at the same time"
   // case. We do not want the second process to fail just because the first one
   // finished cloning a moment earlier.
@@ -162,6 +228,8 @@ describe('git plugin cache', () => {
     expect(() => parseGitPluginRef('git:github.com')).toThrowError('missing repository path');
     expect(() => parseGitPluginRef('git:github.com/example/repo@')).toThrowError('empty git ref after @');
     expect(() => parseGitPluginRef('git:github.com/example/repo//')).toThrowError('empty plugin subdir after //');
+    expect(() => parseGitPluginRef('git:../example/repo')).toThrowError('invalid git host');
+    expect(() => parseGitPluginRef('git:./example/repo')).toThrowError('invalid git host');
   });
 
   it('rejects repository and subdir path traversal', () => {
