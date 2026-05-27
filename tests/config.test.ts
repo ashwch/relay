@@ -54,7 +54,7 @@ describe('config loading', () => {
     expect(validateConfig(buildConfig({ version_source: { type: 'backend-date-release', counter_source: 'github-tag', separator: '.' } })).version_source.type).toBe('backend-date-release');
     expect(validateConfig(buildConfig({ version_source: { type: 'template', template: '{date}.{counter}-{short_sha}', counter_source: 'explicit', counter: 4 } })).version_source.type).toBe('template');
     expect(validateConfig(buildConfig({ version_source: { type: 'explicit', value: '2026.05.22.7' } })).version_source.type).toBe('explicit');
-    expect(validateConfig(buildConfig({ version_source: { type: 'package-json', path: 'package.json' } })).version_source.type).toBe('package-json');
+    expect(validateConfig(buildConfig({ version_source: { type: 'file', format: 'json', path: 'package.json', key_path: ['version'] } })).version_source.type).toBe('file');
     expect(validateConfig(buildConfig({ version_source: { type: 'env', key: 'RELEASE_VERSION' } })).version_source.type).toBe('env');
     expect(validateConfig(buildConfig({ version_source: { type: 'git-tag', pattern: '^v(?<version>.+)$' } })).version_source.type).toBe('git-tag');
     expect(validateConfig(buildConfig({ version_source: { type: 'conventional-commits', tag_prefix: 'v', initial_version: '0.1.0', default_increment: 'patch' } })).version_source.type).toBe('conventional-commits');
@@ -99,6 +99,58 @@ describe('config loading', () => {
         type: 'env',
       },
     }))).toThrowError(ConfigValidationError);
+  });
+
+  it('rejects invalid file version source shapes', () => {
+    expect(readValidationDetails(() => validateConfig(buildConfig({
+      version_source: {
+        type: 'file',
+        format: 'ini',
+        path: 'package.json',
+        key_path: ['version'],
+      },
+    })))).toContain('/version_source/format file version sources require version_source.format to be one of: json, yaml, toml');
+
+    expect(() => validateConfig(buildConfig({
+      version_source: {
+        type: 'file',
+        format: 'json',
+        path: '',
+        key_path: ['version'],
+      },
+    }))).toThrowError(ConfigValidationError);
+
+    expect(() => validateConfig(buildConfig({
+      version_source: {
+        type: 'file',
+        format: 'json',
+        path: 'package.json',
+        key_path: [],
+      },
+    }))).toThrowError(ConfigValidationError);
+
+    expect(() => validateConfig(buildConfig({
+      version_source: {
+        type: 'file',
+        format: 'json',
+        path: 'package.json',
+        key_path: ['version', ''],
+      },
+    }))).toThrowError(ConfigValidationError);
+  });
+
+  it('rejects removed package-json version source configs', () => {
+    const candidate = {
+      ...buildConfig({}),
+      version_source: {
+        type: 'package-json',
+        path: 'package.json',
+      },
+    };
+
+    expect(readValidationDetails(() => validateConfig(candidate))).toContain(
+      '/version_source/type package-json has been removed; use version_source.type=file with format=json, path=package.json, and key_path=[version]',
+    );
   });
 
   it('rejects invalid git-tag extraction regexes', () => {
@@ -203,6 +255,19 @@ describe('config loading', () => {
     }))).toThrowError(ConfigValidationError);
   });
 });
+
+function readValidationDetails(callback: () => unknown): string[] {
+  try {
+    callback();
+  } catch (error) {
+    if (error instanceof ConfigValidationError) {
+      return error.details;
+    }
+    throw error;
+  }
+
+  throw new Error('expected config validation to fail');
+}
 
 function buildConfig(overrides: Partial<ReleaseConfig>): ReleaseConfig {
   return {

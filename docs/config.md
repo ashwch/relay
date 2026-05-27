@@ -164,10 +164,13 @@ For example, a repo can keep the same business profile name while swapping imple
 ## The most important fields
 
 If you care specifically about date-based, counter-based, semver-from-git,
-Changesets, or package-driven version schemas, also read:
+Changesets, or static file-backed version schemas, also read:
 
 - `docs/versioning.md`
 - `examples/version-package-json.yml`
+- `examples/version-pyproject-toml.yml`
+- `examples/version-cargo-toml.yml`
+- `examples/version-custom-yaml.yml`
 - `examples/version-env.yml`
 - `examples/version-git-tag.yml`
 - `examples/version-conventional-commits.yml`
@@ -185,7 +188,7 @@ There are two broad families:
 
 ```text
 observe an existing version
-  -> package-json
+  -> file
   -> env
   -> git-tag
   -> explicit
@@ -211,6 +214,10 @@ CI already exported RELEASE_VERSION=2.3.4
 In those cases, Relay should usually observe that value instead of inventing a
 new one.
 
+The generic `file` source is intentionally for **static** file-backed values.
+It does not evaluate dynamic Python versioning, Cargo workspace inheritance, or
+Go release versions from `go.mod`.
+
 Other repos want Relay to compute the version from git history or date rules.
 That is where the computed version sources help.
 
@@ -230,8 +237,11 @@ Small examples:
 
 ```yaml
 version_source:
-  type: package-json
+  type: file
+  format: json
   path: package.json
+  key_path:
+    - version
 ```
 
 ```yaml

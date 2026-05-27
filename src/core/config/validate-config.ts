@@ -5,6 +5,7 @@ import parseSemver from 'semver/functions/parse.js';
 import { readJsonObjectFile } from '../io/files.js';
 import {
   dynamicSemverVersionSourceTypes,
+  isFileVersionSourceFormat,
   versionSourceUsesCounter,
   versionSourceTypes,
 } from '../version-source.js';
@@ -55,10 +56,17 @@ export class ConfigValidationError extends Error {
 
 export function validateConfig(candidate: unknown): ReleaseConfig {
   if (!validate(candidate)) {
-    const details = (validate.errors ?? []).map((error: { instancePath?: string; message?: string }) => {
+    const genericDetails = (validate.errors ?? []).map((error: { instancePath?: string; message?: string }) => {
       const pointer = error.instancePath || '/';
       return `${pointer} ${error.message ?? 'validation error'}`;
     });
+    const friendlyVersionSourceDetails = readFriendlyVersionSourceSchemaErrors(candidate);
+    const details = friendlyVersionSourceDetails
+      ? [
+        ...friendlyVersionSourceDetails,
+        ...genericDetails.filter((detail) => !detail.startsWith('/version_source')),
+      ]
+      : genericDetails;
     throw new ConfigValidationError('invalid relay config', details);
   }
 
@@ -89,6 +97,46 @@ export function validateConfig(candidate: unknown): ReleaseConfig {
 //   only discoverable after git/files/env inspection
 //         ↓
 //   runtime resolver handles it
+//
+// AJV's generic `oneOf` output becomes noisy for version_source because many
+// source shapes share the same object slot. For file-backed versioning we
+// prefer one human explanation over dozens of low-signal schema messages.
+function readFriendlyVersionSourceSchemaErrors(candidate: unknown): string[] | undefined {
+  if (!isRecord(candidate) || !isRecord(candidate.version_source)) {
+    return undefined;
+  }
+
+  const source = candidate.version_source;
+
+  // Relay intentionally collapsed package-json into the generic file source.
+  // A custom message makes that migration obvious to future readers.
+  if (source.type === 'package-json') {
+    return [
+      '/version_source/type package-json has been removed; use version_source.type=file with format=json, path=package.json, and key_path=[version]',
+    ];
+  }
+
+  if (source.type !== versionSourceTypes.file) {
+    return undefined;
+  }
+
+  // Keep these checks duplicated very lightly from the schema on purpose.
+  // The schema answers "is this shape allowed?".
+  // These messages answer "what should I change right now?".
+  const errors: string[] = [];
+  if (typeof source.format !== 'string' || !isFileVersionSourceFormat(source.format)) {
+    errors.push('/version_source/format file version sources require version_source.format to be one of: json, yaml, toml');
+  }
+  if (!isNonEmptyString(source.path)) {
+    errors.push('/version_source/path file version sources require version_source.path to be a non-empty string');
+  }
+  if (!Array.isArray(source.key_path) || source.key_path.length === 0 || !source.key_path.every(isNonEmptyString)) {
+    errors.push('/version_source/key_path file version sources require version_source.key_path to be a non-empty array of non-empty strings');
+  }
+
+  return errors.length > 0 ? errors : undefined;
+}
+
 function validateVersioningConfig(config: ReleaseConfig): string[] {
   const errors: string[] = [];
   const source = config.version_source;
@@ -130,10 +178,6 @@ function validateVersioningConfig(config: ReleaseConfig): string[] {
     if (patternErrors.length === 0 && !containsVersionCaptureGroup(source.pattern)) {
       errors.push('/version_source/pattern git-tag extraction patterns must include a named (?<version>...) group or a positional capture group');
     }
-  }
-
-  if (source.type === versionSourceTypes.packageJson && source.path !== undefined && !isNonEmptyString(source.path)) {
-    errors.push('/version_source/path package-json version sources require version_source.path to be a non-empty string when provided');
   }
 
   // Changesets works only when Relay knows which package to inspect.
@@ -343,6 +387,10 @@ function containsVersionCaptureGroup(pattern: string): boolean {
 
 function containsAnyPlaceholder(template: string, placeholders: string[]): boolean {
   return placeholders.some((placeholder) => template.includes(placeholder));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function isPositiveInteger(value: unknown): value is number {

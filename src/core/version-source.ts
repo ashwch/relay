@@ -19,14 +19,35 @@ export const versionSourceTypes = {
   dateRelease: 'date-release',
   template: 'template',
   explicit: 'explicit',
-  packageJson: 'package-json',
+  file: 'file',
   env: 'env',
   gitTag: 'git-tag',
   conventionalCommits: 'conventional-commits',
   changesets: 'changesets',
 } as const;
 
+// Generic file-backed versioning is intentionally small.
+//
+// Mental model:
+//
+//   one structured file
+//      + one parser choice
+//      + one key_path
+//      ↓
+//   one observed version string
+//
+// We keep the supported formats here so schema, validation, and runtime all use
+// the same tiny source of truth.
+export const fileVersionSourceFormats = {
+  json: 'json',
+  yaml: 'yaml',
+  toml: 'toml',
+} as const;
+
 export type VersionSourceType = typeof versionSourceTypes[keyof typeof versionSourceTypes];
+export type FileVersionSourceFormat = typeof fileVersionSourceFormats[keyof typeof fileVersionSourceFormats];
+
+const fileVersionSourceFormatValues: ReadonlySet<string> = new Set(Object.values(fileVersionSourceFormats));
 
 interface VersionSourceLike {
   type: string;
@@ -62,6 +83,23 @@ export function readVersionSourceNumberOption(source: VersionSourceLike, key: st
 export function readVersionSourceBooleanOption(source: VersionSourceLike, key: string): boolean | undefined {
   const value = source[key];
   return typeof value === 'boolean' ? value : undefined;
+}
+
+// `key_path` is array-based on purpose.
+//
+// Why not dotted strings like `project.version`?
+// - no ambiguity around literal dots in keys
+// - simpler validation
+// - simpler future extension if Relay ever needs richer path semantics
+export function readVersionSourceStringArrayOption(source: VersionSourceLike, key: string): string[] | undefined {
+  const value = source[key];
+  return Array.isArray(value) && value.every((entry) => typeof entry === 'string' && entry.length > 0)
+    ? value
+    : undefined;
+}
+
+export function isFileVersionSourceFormat(value: string): value is FileVersionSourceFormat {
+  return fileVersionSourceFormatValues.has(value);
 }
 
 export function versionSourceUsesCounter(source: VersionSourceLike): boolean {

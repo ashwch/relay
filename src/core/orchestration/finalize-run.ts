@@ -33,7 +33,7 @@ import {
 import { readJsonObjectFile } from '../io/files.js';
 import { validateNormalizedRelease } from '../release-json/invariants.js';
 import { applyMergePatch } from '../release-json/merge-patch.js';
-import type { NormalizedRelease } from '../release-json/schema.js';
+import { readNotificationDeliveryPolicy, type NormalizedRelease } from '../release-json/schema.js';
 import { resolveReleaseIdentity } from '../release-json/versioning.js';
 import type { EnvMap, RuntimeArgs, StringMap, UnknownMap } from '../types/runtime.js';
 import type { JsonObject } from '../types/json.js';
@@ -481,28 +481,28 @@ async function runConfiguredNotifications(
   }
 
   let next = release;
-	  for (const notifier of resolveNotifierSelections(loaded)) {
-	    const plugin = loadPlugin(loaded, notifier.plugin, 'notifier');
-	    const pluginConfig = validatePluginConfig(plugin, resolveNotifierPluginConfig(loaded, notifier));
-	    const secrets = resolvePluginSecrets(plugin.manifest, pluginConfig, env);
-	    const markerKey = buildNotificationMarkerKey(notifier.plugin);
-	    const deliveryPolicy = readDeliveryPolicy(notifier);
-	    const forceNotify = readForceNotify(options.args);
-	    let notificationMarker: Awaited<ReturnType<typeof readNotificationMarker>> = null;
+  for (const notifier of resolveNotifierSelections(loaded)) {
+    const plugin = loadPlugin(loaded, notifier.plugin, 'notifier');
+    const pluginConfig = validatePluginConfig(plugin, resolveNotifierPluginConfig(loaded, notifier));
+    const secrets = resolvePluginSecrets(plugin.manifest, pluginConfig, env);
+    const markerKey = buildNotificationMarkerKey(notifier.plugin);
+    const deliveryPolicy = readNotificationDeliveryPolicy(notifier.options);
+    const forceNotify = readForceNotify(options.args);
+    let notificationMarker: Awaited<ReturnType<typeof readNotificationMarker>> = null;
 
-	    if (!options.dryRun && deliveryPolicy === 'once') {
-	      const client = createGitHubClient({
-	        owner: next.repository.owner,
+    if (!options.dryRun && deliveryPolicy === 'once') {
+      const client = createGitHubClient({
+        owner: next.repository.owner,
         name: next.repository.name,
       }, env);
       notificationMarker = await readNotificationMarker(client, next.release.tag, markerKey);
-	      if (!notificationMarker) {
-	        throw new Error(`cannot check notification marker for ${next.release.tag} because GitHub Release was not found`);
-	      }
-	      if (notificationMarker.exists && !forceNotify) {
-	        next.notifications.deliveries.push({
-	          plugin: notifier.plugin,
-	          status: 'skipped',
+      if (!notificationMarker) {
+        throw new Error(`cannot check notification marker for ${next.release.tag} because GitHub Release was not found`);
+      }
+      if (notificationMarker.exists && !forceNotify) {
+        next.notifications.deliveries.push({
+          plugin: notifier.plugin,
+          status: 'skipped',
           recorded_at: new Date().toISOString(),
           details: {
             reason: 'notification marker exists',
@@ -672,10 +672,6 @@ function buildNotificationDetails(payload: unknown, delivery: unknown): UnknownM
 
 function buildNotificationMarkerKey(pluginRef: string): string {
   return pluginRef.replace(/^builtin:/, '');
-}
-
-function readDeliveryPolicy(selection: { options?: JsonObject }): 'once' | 'always' {
-  return selection.options?.delivery_policy === 'always' ? 'always' : 'once';
 }
 
 function readForceNotify(args: RuntimeArgs): boolean {
