@@ -1,3 +1,4 @@
+import type { VersionSourceType } from '../version-source.js';
 import type { JsonObject, JsonValue } from '../types/json.js';
 
 export type ReleaseMode = 'framework-managed' | 'tool-observe' | 'tool-wrap';
@@ -10,7 +11,7 @@ export interface PluginSelectionObject {
 export type PluginSelection = string | PluginSelectionObject;
 
 export interface VersionSource {
-  type: string;
+  type: VersionSourceType;
   [key: string]: JsonValue | undefined;
 }
 

@@ -1,6 +1,6 @@
 {
   "_comment": "Minimal external notifier plugin. Demonstrates the render + notify hook split: render builds a payload without side effects, notify simulates delivery (noop on dry_run). For authoring guidance, see docs/plugin-authoring.md.",
-  "api_version": "release-framework.plugin/v1",
+  "api_version": "relay.plugin/v1",
   "name": "example-notifier",
   "type": "notifier",
   "plugin_version": "1.0.0",

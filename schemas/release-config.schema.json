@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://release-framework.dev/schemas/release-config.schema.json",
-  "title": "Release Framework Config v1",
+  "$id": "https://relay.dev/schemas/release-config.schema.json",
+  "title": "Relay Config v1",
   "description": "Repository-level configuration for relay. This file chooses how a project defines release completion, versioning, tags, and shared plugin behavior.",
   "examples": [
     {
@@ -21,7 +21,9 @@
       "metadata_enrichers": [],
       "plugin_allowlist": [],
       "allow_local_plugins": false,
-      "stable_branches": ["main"],
+      "stable_branches": [
+        "main"
+      ],
       "version_source": {
         "type": "date-sha"
       },
@@ -48,13 +50,76 @@
       "metadata_enrichers": [],
       "plugin_allowlist": [],
       "allow_local_plugins": false,
-      "stable_branches": ["main"],
+      "stable_branches": [
+        "main"
+      ],
       "version_source": {
         "type": "backend-date-release",
         "counter_source": "github-tag",
         "separator": "."
       },
       "tag_template": "release-{version}",
+      "notes_source": {
+        "type": "static"
+      },
+      "plugin_config": {}
+    },
+    {
+      "api_version": 1,
+      "product_name": "Relay",
+      "release_profile": "npm-package",
+      "release_mode": "framework-managed",
+      "provider_plugin": "builtin:github-actions",
+      "profile_plugin": "builtin:npm-package",
+      "tool_plugin": null,
+      "artifact_publishers": [
+        {
+          "plugin": "builtin:npm-registry-verify"
+        }
+      ],
+      "notifiers": [],
+      "metadata_enrichers": [],
+      "plugin_allowlist": [],
+      "allow_local_plugins": false,
+      "stable_branches": [
+        "main"
+      ],
+      "version_source": {
+        "type": "package-json",
+        "path": "package.json"
+      },
+      "tag_template": "v{version}",
+      "notes_source": {
+        "type": "static"
+      },
+      "package": {
+        "name": "@ashwch/relay",
+        "registry_url": "https://registry.npmjs.org"
+      },
+      "plugin_config": {}
+    },
+    {
+      "api_version": 1,
+      "product_name": "Example Service",
+      "release_profile": "deploy-release",
+      "release_mode": "framework-managed",
+      "provider_plugin": "builtin:github-actions",
+      "profile_plugin": "builtin:deploy-release",
+      "tool_plugin": null,
+      "artifact_publishers": [],
+      "notifiers": [],
+      "metadata_enrichers": [],
+      "plugin_allowlist": [],
+      "allow_local_plugins": false,
+      "stable_branches": [
+        "main"
+      ],
+      "version_source": {
+        "type": "conventional-commits",
+        "tag_prefix": "v",
+        "initial_version": "0.1.0"
+      },
+      "tag_template": "v{version}",
       "notes_source": {
         "type": "static"
       },
@@ -91,7 +156,11 @@
     },
     "release_mode": {
       "type": "string",
-      "enum": ["framework-managed", "tool-observe", "tool-wrap"],
+      "enum": [
+        "framework-managed",
+        "tool-observe",
+        "tool-wrap"
+      ],
       "description": "Who owns the durable release record: core, an external tool, or a future wrapped tool execution path."
     },
     "provider_plugin": {
@@ -105,24 +174,33 @@
       "description": "Concrete profile plugin implementation for the selected release profile."
     },
     "tool_plugin": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "Optional release-tool plugin ref for tool-observe or tool-wrap flows."
     },
     "artifact_publishers": {
       "type": "array",
-      "items": { "$ref": "#/$defs/pluginSelection" },
+      "items": {
+        "$ref": "#/$defs/pluginSelection"
+      },
       "default": [],
       "description": "Ordered artifact publisher or verifier plugins."
     },
     "notifiers": {
       "type": "array",
-      "items": { "$ref": "#/$defs/pluginSelection" },
+      "items": {
+        "$ref": "#/$defs/pluginSelection"
+      },
       "default": [],
       "description": "Ordered notifier plugins."
     },
     "metadata_enrichers": {
       "type": "array",
-      "items": { "$ref": "#/$defs/pluginSelection" },
+      "items": {
+        "$ref": "#/$defs/pluginSelection"
+      },
       "default": [],
       "description": "Ordered metadata enrichers that add optional release context."
     },
@@ -151,13 +229,42 @@
     "version_source": {
       "description": "How this project derives its release version string. Different projects can choose different schemas here.",
       "oneOf": [
-        { "$ref": "#/$defs/versionSourceDate" },
-        { "$ref": "#/$defs/versionSourceDateSha" },
-        { "$ref": "#/$defs/versionSourceDateTime" },
-        { "$ref": "#/$defs/versionSourceDateCounter" },
-        { "$ref": "#/$defs/versionSourceBackendDateRelease" },
-        { "$ref": "#/$defs/versionSourceTemplate" },
-        { "$ref": "#/$defs/versionSourceExplicit" }
+        {
+          "$ref": "#/$defs/versionSourceDate"
+        },
+        {
+          "$ref": "#/$defs/versionSourceDateSha"
+        },
+        {
+          "$ref": "#/$defs/versionSourceDateTime"
+        },
+        {
+          "$ref": "#/$defs/versionSourceDateCounter"
+        },
+        {
+          "$ref": "#/$defs/versionSourceBackendDateRelease"
+        },
+        {
+          "$ref": "#/$defs/versionSourceTemplate"
+        },
+        {
+          "$ref": "#/$defs/versionSourceExplicit"
+        },
+        {
+          "$ref": "#/$defs/versionSourcePackageJson"
+        },
+        {
+          "$ref": "#/$defs/versionSourceEnv"
+        },
+        {
+          "$ref": "#/$defs/versionSourceGitTag"
+        },
+        {
+          "$ref": "#/$defs/versionSourceConventionalCommits"
+        },
+        {
+          "$ref": "#/$defs/versionSourceChangesets"
+        }
       ]
     },
     "tag_template": {
@@ -173,9 +280,14 @@
     },
     "notes_source": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
-        "type": { "type": "string", "minLength": 1 }
+        "type": {
+          "type": "string",
+          "minLength": 1
+        }
       },
       "additionalProperties": true,
       "description": "How release notes should be sourced."
@@ -187,8 +299,13 @@
     "slack": {
       "type": "object",
       "properties": {
-        "enabled": { "type": "boolean" },
-        "webhook_secret": { "type": "string", "minLength": 1 }
+        "enabled": {
+          "type": "boolean"
+        },
+        "webhook_secret": {
+          "type": "string",
+          "minLength": 1
+        }
       },
       "additionalProperties": true,
       "description": "First-party convenience block for Slack webhook notifier settings."
@@ -208,13 +325,24 @@
   "$defs": {
     "pluginSelection": {
       "oneOf": [
-        { "type": "string", "minLength": 1 },
+        {
+          "type": "string",
+          "minLength": 1
+        },
         {
           "type": "object",
-          "required": ["plugin"],
+          "required": [
+            "plugin"
+          ],
           "properties": {
-            "plugin": { "type": "string", "minLength": 1 },
-            "options": { "type": "object", "additionalProperties": true }
+            "plugin": {
+              "type": "string",
+              "minLength": 1
+            },
+            "options": {
+              "type": "object",
+              "additionalProperties": true
+            }
           },
           "additionalProperties": false
         }
@@ -222,12 +350,17 @@
     },
     "counterSource": {
       "type": "string",
-      "enum": ["github-tag", "explicit"],
+      "enum": [
+        "github-tag",
+        "explicit"
+      ],
       "description": "How a same-day release counter should be resolved."
     },
     "versionSourceDate": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "const": "date"
@@ -243,7 +376,9 @@
     },
     "versionSourceDateSha": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "const": "date-sha"
@@ -259,7 +394,9 @@
     },
     "versionSourceDateTime": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "const": "date-time"
@@ -271,7 +408,10 @@
         },
         "time_precision": {
           "type": "string",
-          "enum": ["minutes", "seconds"],
+          "enum": [
+            "minutes",
+            "seconds"
+          ],
           "default": "seconds"
         }
       },
@@ -287,7 +427,9 @@
     },
     "versionSourceDateCounter": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
           "const": "date-counter"
@@ -320,11 +462,15 @@
         {
           "if": {
             "properties": {
-              "counter_source": { "const": "explicit" }
+              "counter_source": {
+                "const": "explicit"
+              }
             }
           },
           "then": {
-            "required": ["counter"]
+            "required": [
+              "counter"
+            ]
           }
         }
       ],
@@ -346,10 +492,15 @@
     },
     "versionSourceBackendDateRelease": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "properties": {
         "type": {
-          "enum": ["backend-date-release", "date-release"]
+          "enum": [
+            "backend-date-release",
+            "date-release"
+          ]
         },
         "counter_source": {
           "$ref": "#/$defs/counterSource",
@@ -383,11 +534,15 @@
         {
           "if": {
             "properties": {
-              "counter_source": { "const": "explicit" }
+              "counter_source": {
+                "const": "explicit"
+              }
             }
           },
           "then": {
-            "required": ["counter"]
+            "required": [
+              "counter"
+            ]
           }
         }
       ],
@@ -409,7 +564,10 @@
     },
     "versionSourceTemplate": {
       "type": "object",
-      "required": ["type", "template"],
+      "required": [
+        "type",
+        "template"
+      ],
       "properties": {
         "type": {
           "const": "template"
@@ -445,11 +603,15 @@
         {
           "if": {
             "properties": {
-              "counter_source": { "const": "explicit" }
+              "counter_source": {
+                "const": "explicit"
+              }
             }
           },
           "then": {
-            "required": ["counter"]
+            "required": [
+              "counter"
+            ]
           }
         }
       ],
@@ -466,7 +628,10 @@
     },
     "versionSourceExplicit": {
       "type": "object",
-      "required": ["type", "value"],
+      "required": [
+        "type",
+        "value"
+      ],
       "properties": {
         "type": {
           "const": "explicit"
@@ -482,6 +647,167 @@
         {
           "type": "explicit",
           "value": "2026.05.22.7"
+        }
+      ]
+    },
+    "versionSourcePackageJson": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "package-json"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "default": "package.json"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Read the version directly from a package.json file.",
+      "examples": [
+        {
+          "type": "package-json",
+          "path": "package.json"
+        }
+      ]
+    },
+    "versionSourceEnv": {
+      "type": "object",
+      "required": [
+        "type",
+        "key"
+      ],
+      "properties": {
+        "type": {
+          "const": "env"
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "description": "Read the version from an environment variable or CI-provided runtime value.",
+      "examples": [
+        {
+          "type": "env",
+          "key": "RELEASE_VERSION"
+        }
+      ]
+    },
+    "versionSourceGitTag": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "git-tag"
+        },
+        "pattern": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "description": "Read the version from the current tag ref. Optionally extract just the version portion with a regex.",
+      "examples": [
+        {
+          "type": "git-tag"
+        },
+        {
+          "type": "git-tag",
+          "pattern": "^v(?<version>.+)$"
+        }
+      ]
+    },
+    "versionSourceConventionalCommits": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "conventional-commits"
+        },
+        "tag_prefix": {
+          "type": "string",
+          "default": ""
+        },
+        "initial_version": {
+          "type": "string",
+          "minLength": 1,
+          "default": "0.1.0"
+        },
+        "default_increment": {
+          "type": "string",
+          "enum": [
+            "major",
+            "minor",
+            "patch"
+          ],
+          "default": "patch"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Infer the next semver bump from conventional commit messages since the latest matching tag.",
+      "examples": [
+        {
+          "type": "conventional-commits",
+          "tag_prefix": "v",
+          "initial_version": "0.1.0",
+          "default_increment": "patch"
+        }
+      ]
+    },
+    "versionSourceChangesets": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "type": {
+          "const": "changesets"
+        },
+        "directory": {
+          "type": "string",
+          "minLength": 1,
+          "default": ".changeset"
+        },
+        "package": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag_prefix": {
+          "type": "string",
+          "default": ""
+        },
+        "initial_version": {
+          "type": "string",
+          "minLength": 1,
+          "default": "0.1.0"
+        },
+        "default_increment": {
+          "type": "string",
+          "enum": [
+            "major",
+            "minor",
+            "patch"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "description": "Infer the next semver bump from pending Changeset files for one package.",
+      "examples": [
+        {
+          "type": "changesets",
+          "directory": ".changeset",
+          "package": "@example/component-library",
+          "tag_prefix": "v",
+          "initial_version": "0.1.0"
         }
       ]
     }

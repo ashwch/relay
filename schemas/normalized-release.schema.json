@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://release-framework.dev/schemas/normalized-release.schema.json",
+  "$id": "https://relay.dev/schemas/normalized-release.schema.json",
   "title": "Normalized Release JSON v1",
   "type": "object",
   "required": [
@@ -20,7 +20,7 @@
     "extensions"
   ],
   "properties": {
-    "schema_version": { "const": "release-framework.release/v1" },
+    "schema_version": { "const": "relay.release/v1" },
     "run": {
       "type": "object",
       "required": ["id", "dry_run", "provider", "trigger"],

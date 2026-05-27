@@ -85,7 +85,7 @@ export async function normalizeReleaseDocument(options: RuntimeOptions): Promise
   }
 
   let release = applyRefRuntimeOverrides(normalized, options.args, loaded.config.stable_branches);
-  release = await applyResolvedReleaseIdentity(loaded.config, release, env);
+  release = await applyResolvedReleaseIdentity(loaded.config, release, env, workspaceRoot);
   release = applyExplicitTagOverride(release, options.args);
   release = applyMetadata(release, options.metadataPath);
   return validateNormalizedRelease(release);
@@ -296,8 +296,9 @@ async function applyResolvedReleaseIdentity(
   config: ReleaseConfig,
   release: NormalizedRelease,
   env: EnvMap,
+  workspaceRoot: string,
 ): Promise<NormalizedRelease> {
-  const identity = await resolveReleaseIdentity(config, release, env);
+  const identity = await resolveReleaseIdentity(config, release, env, workspaceRoot);
   return applyMergePatch(release, {
     release: {
       version: identity.version,

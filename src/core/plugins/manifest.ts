@@ -38,7 +38,7 @@ const ajv = new Ajv2020({ allErrors: true, strict: false });
 const validate = ajv.compile<PluginManifest>(schema);
 
 export interface PluginManifest {
-  api_version: 'release-framework.plugin/v1';
+  api_version: 'relay.plugin/v1';
   name: string;
   type: PluginType;
   plugin_version: string;

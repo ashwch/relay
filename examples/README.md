@@ -20,6 +20,70 @@ phase_plan  -> which plugin hooks will run and in what order
 
 ## Examples
 
+### `version-package-json.yml`
+
+Use when a package repo already stores the publishable version in
+`package.json`.
+
+```text
+package.json version
+  ↓
+relay reads it directly
+  ↓
+tag/release identity stays aligned with npm
+```
+
+### `version-env.yml`
+
+Use when an upstream CI system or release tool already decided the final
+version and exposes it through an environment variable.
+
+```text
+CI export (for example RELEASE_VERSION)
+  ↓
+relay reads env
+  ↓
+finalize with that exact version
+```
+
+### `version-git-tag.yml`
+
+Use when the current git tag is already the source of truth.
+
+```text
+git tag v1.2.3
+  ↓
+extract 1.2.3
+  ↓
+release/tag identity stays tag-driven
+```
+
+### `version-conventional-commits.yml`
+
+Use when the repo already follows conventional commits and you want Relay to
+infer the next semver bump from git history.
+
+```text
+latest reachable semver tag
+  +
+conventional commit messages since that tag
+  ↓
+next semver version
+```
+
+### `version-changesets.yml`
+
+Use when the repo already uses Changesets and Relay should infer the next
+semver bump from pending `.changeset/*.md` files.
+
+```text
+latest reachable semver tag
+  +
+pending changeset bump files
+  ↓
+next semver version
+```
+
 ### `plugins/`
 
 Use when you want a copyable external plugin layout instead of only config

@@ -71,7 +71,7 @@ jobs:
         with:
           fetch-depth: 0
       - id: finalize
-        uses: DiversioTeam/release-framework/actions/release-finalize@v1
+        uses: ashwch/relay/actions/release-finalize@v1
         with:
           config_path: ${{ inputs.config_path }}
           release_ref: ${{ inputs.release_ref }}

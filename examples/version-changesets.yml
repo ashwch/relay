@@ -1,8 +1,8 @@
 api_version: 1
-product_name: Relay
+product_name: Example Component Library
 release_profile: npm-package
 release_mode: framework-managed
-provider_plugin: builtin:github-actions
+provider_plugin: builtin:generic-env
 profile_plugin: builtin:npm-package
 tool_plugin: null
 artifact_publishers:
@@ -11,14 +11,18 @@ notifiers: []
 metadata_enrichers: []
 plugin_allowlist: []
 allow_local_plugins: false
-stable_branches: [main]
+stable_branches:
+  - main
 version_source:
-  type: package-json
-  path: package.json
+  type: changesets
+  directory: .changeset
+  package: '@example/component-library'
+  tag_prefix: v
+  initial_version: 0.1.0
 tag_template: v{version}
 notes_source:
   type: static
 package:
-  name: '@ashwch/relay'
+  name: '@example/component-library'
   registry_url: https://registry.npmjs.org
 plugin_config: {}

@@ -1,5 +1,5 @@
 {
-  "api_version": "release-framework.plugin/v1",
+  "api_version": "relay.plugin/v1",
   "name": "builtin:deploy-release",
   "type": "profile",
   "plugin_version": "1.0.0",

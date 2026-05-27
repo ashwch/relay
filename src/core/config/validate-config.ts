@@ -1,7 +1,13 @@
 import path from 'node:path';
 import { Ajv2020 } from 'ajv/dist/2020.js';
+import parseSemver from 'semver/functions/parse.js';
 
 import { readJsonObjectFile } from '../io/files.js';
+import {
+  dynamicSemverVersionSourceTypes,
+  versionSourceUsesCounter,
+  versionSourceTypes,
+} from '../version-source.js';
 import type { PluginSelection, PluginSelectionObject, ReleaseConfig } from './types.js';
 
 const schemaPath = path.resolve(import.meta.dirname, '../../../schemas/release-config.schema.json');
@@ -13,6 +19,19 @@ const builtinSlackWebhookPlugin = 'builtin:slack-webhook';
 const builtinGitHubReleaseAssetsPlugin = 'builtin:github-release-assets';
 const builtinNpmRegistryVerifyPlugin = 'builtin:npm-registry-verify';
 const allowedPluginRefPrefixes = ['builtin:', 'npm:', 'path:'];
+const supportedSemverIncrements = new Set(['major', 'minor', 'patch']);
+
+// This file performs two different kinds of checks:
+//
+// 1. JSON schema validation
+//    -> does the shape look valid at all?
+//
+// 2. semantic validation
+//    -> does the config make sense for how Relay actually behaves?
+//
+// The newer version sources especially need semantic checks because some bad
+// configs are structurally valid JSON/YAML but still guaranteed to fail later
+// at runtime unless we explain the mistake here.
 
 export class ConfigValidationError extends Error {
   constructor(message: string, readonly details: string[]) {
@@ -26,7 +45,7 @@ export function validateConfig(candidate: unknown): ReleaseConfig {
       const pointer = error.instancePath || '/';
       return `${pointer} ${error.message ?? 'validation error'}`;
     });
-    throw new ConfigValidationError('invalid release framework config', details);
+    throw new ConfigValidationError('invalid relay config', details);
   }
 
   const config = candidate;
@@ -38,42 +57,98 @@ export function validateConfig(candidate: unknown): ReleaseConfig {
     ...validateArtifactConfig(config),
   ];
   if (semanticErrors.length > 0) {
-    throw new ConfigValidationError('invalid release framework config', semanticErrors);
+    throw new ConfigValidationError('invalid relay config', semanticErrors);
   }
 
   return config;
 }
 
+// Keep versioning failures close to config load time instead of surprising the
+// user later during a release run.
+//
+// Visual rule:
+//
+//   easy to explain in config review
+//         ↓
+//   reject here
+//
+//   only discoverable after git/files/env inspection
+//         ↓
+//   runtime resolver handles it
 function validateVersioningConfig(config: ReleaseConfig): string[] {
   const errors: string[] = [];
   const source = config.version_source;
-  const counterBasedTypes = new Set(['date-counter', 'backend-date-release', 'date-release']);
-  const usesTemplateCounter = source.type === 'template'
-    && typeof source.template === 'string'
-    && source.template.includes('{counter}');
 
   const counterSource = typeof source.counter_source === 'string'
     ? source.counter_source
     : 'github-tag';
 
-  const needsVisibleCounter = counterBasedTypes.has(source.type) || usesTemplateCounter;
+  const needsVisibleCounter = versionSourceUsesCounter(source);
   if (needsVisibleCounter && !containsAnyPlaceholder(config.tag_template, ['{version}', '{counter}'])) {
     errors.push('/tag_template counter-based versioning requires tag_template to include {version} or {counter}');
   }
 
-  if (source.type === 'template' && typeof source.template === 'string' && source.template.includes('{version}')) {
+  if (source.type === versionSourceTypes.template && typeof source.template === 'string' && source.template.includes('{version}')) {
     errors.push('/version_source/template custom version templates may not reference {version}; use concrete fields such as {date}, {counter}, {short_sha}, {sha}, {branch}, or {time}');
   }
 
-  if (source.type === 'template' && typeof source.template === 'string') {
+  if (source.type === versionSourceTypes.template && typeof source.template === 'string') {
     errors.push(...validateTemplatePlaceholders('/version_source/template', source.template, ['date', 'counter', 'short_sha', 'sha', 'branch', 'time']));
   }
 
   errors.push(...validateTemplatePlaceholders('/tag_template', config.tag_template, ['version', 'date', 'counter', 'short_sha', 'sha', 'branch', 'time']));
 
-  if (counterSource === 'explicit') {
-    if (!isPositiveInteger(source.counter)) {
-      errors.push('/version_source/counter explicit counter sources require version_source.counter to be a positive integer');
+  if (counterSource === 'explicit' && !isPositiveInteger(source.counter)) {
+    errors.push('/version_source/counter explicit counter sources require version_source.counter to be a positive integer');
+  }
+
+  if (source.type === versionSourceTypes.env && !isNonEmptyString(source.key)) {
+    errors.push('/version_source/key env version sources require version_source.key');
+  }
+
+  // `git-tag` patterns are special because a regex can be syntactically valid
+  // and still be useless for extraction. We reject both:
+  // - invalid regex syntax
+  // - valid regex with no way to capture the version
+  if (source.type === versionSourceTypes.gitTag && isNonEmptyString(source.pattern)) {
+    const patternErrors = validateRegexPattern('/version_source/pattern', source.pattern);
+    errors.push(...patternErrors);
+    if (patternErrors.length === 0 && !containsVersionCaptureGroup(source.pattern)) {
+      errors.push('/version_source/pattern git-tag extraction patterns must include a named (?<version>...) group or a positional capture group');
+    }
+  }
+
+  if (source.type === versionSourceTypes.packageJson && source.path !== undefined && !isNonEmptyString(source.path)) {
+    errors.push('/version_source/path package-json version sources require version_source.path to be a non-empty string when provided');
+  }
+
+  // Changesets works only when Relay knows which package to inspect.
+  // Requiring that here avoids much more confusing downstream errors once the
+  // resolver starts walking .changeset files.
+  if (source.type === versionSourceTypes.changesets) {
+    if (!isNonEmptyString(source.package) && !isNonEmptyString(config.package?.name)) {
+      errors.push('/version_source/package changesets version sources require version_source.package or package.name');
+    }
+    if (source.directory !== undefined && !isNonEmptyString(source.directory)) {
+      errors.push('/version_source/directory changesets version sources require version_source.directory to be a non-empty string when provided');
+    }
+  }
+
+  // The semver-generating sources share a small common contract:
+  // optional initial_version, optional default_increment, optional tag_prefix.
+  //
+  // One extra rule matters a lot here:
+  // the generated tag must expose {version}. Otherwise Relay can compute a
+  // semver value, but future runs cannot learn it back from previously created
+  // tags in a reliable way.
+  if (dynamicSemverVersionSourceTypes.has(source.type)) {
+    errors.push(...validateOptionalSemver('/version_source/initial_version', source.initial_version));
+    errors.push(...validateOptionalIncrement('/version_source/default_increment', source.default_increment));
+    if (source.tag_prefix !== undefined && typeof source.tag_prefix !== 'string') {
+      errors.push('/version_source/tag_prefix must be a string when provided');
+    }
+    if (!config.tag_template.includes('{version}')) {
+      errors.push('/tag_template dynamic semver versioning requires tag_template to include {version} so previously created tags remain discoverable');
     }
   }
 
@@ -211,6 +286,47 @@ function validateOptionalStringArray(pathPrefix: string, value: unknown): string
   return [];
 }
 
+function validateOptionalSemver(pathPrefix: string, value: unknown): string[] {
+  if (value === undefined) {
+    return [];
+  }
+  return isValidSemver(value) ? [] : [`${pathPrefix} must be a valid semver string when provided`];
+}
+
+function validateOptionalIncrement(pathPrefix: string, value: unknown): string[] {
+  if (value === undefined) {
+    return [];
+  }
+  return typeof value === 'string' && supportedSemverIncrements.has(value)
+    ? []
+    : [`${pathPrefix} must be one of: major, minor, patch`];
+}
+
+function validateRegexPattern(pathPrefix: string, value: string): string[] {
+  try {
+    new RegExp(value);
+    return [];
+  } catch {
+    return [`${pathPrefix} must be a valid regular expression`];
+  }
+}
+
+// Detect whether a git-tag regex can actually extract a version.
+//
+// Accepted shapes:
+// - named capture:      ^v(?<version>.+)$
+// - positional capture: ^v(.+)$
+//
+// Rejected shape:
+// - no capture at all:  ^v.+$
+function containsVersionCaptureGroup(pattern: string): boolean {
+  if (pattern.includes('(?<version>')) {
+    return true;
+  }
+
+  return /(^|[^\\])\((?!\?[:=!<])/.test(pattern);
+}
+
 function containsAnyPlaceholder(template: string, placeholders: string[]): boolean {
   return placeholders.some((placeholder) => template.includes(placeholder));
 }
@@ -225,6 +341,10 @@ function isExplicitPluginRef(pluginRef: string): boolean {
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
+}
+
+function isValidSemver(value: unknown): value is string {
+  return typeof value === 'string' && parseSemver(value) !== null;
 }
 
 function readOptionalString(value: unknown): string | undefined {

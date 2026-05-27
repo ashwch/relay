@@ -579,7 +579,7 @@ Minimal `plugin-manifest.json`:
 
 ```json
 {
-  "api_version": "release-framework.plugin/v1",
+  "api_version": "relay.plugin/v1",
   "name": "example-enricher",
   "type": "metadata_enricher",
   "plugin_version": "1.0.0",

@@ -12,7 +12,7 @@ const fixtureProductName = 'Example Web App';
 
 export function buildNormalizedRelease(overrides: Partial<NormalizedRelease> = {}): NormalizedRelease {
   return {
-    schema_version: 'release-framework.release/v1',
+    schema_version: 'relay.release/v1',
     run: {
       id: 'run-1',
       dry_run: false,

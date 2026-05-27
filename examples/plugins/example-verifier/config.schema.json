@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://release-framework.dev/examples/example-verifier/config.schema.json",
+  "$id": "https://relay.dev/examples/example-verifier/config.schema.json",
   "title": "Example Verifier Config",
   "type": "object",
   "properties": {

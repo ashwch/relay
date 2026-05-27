@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { LoadedConfig, ReleaseConfig } from '../../core/config/types.js';
+import { versionSourceTypes } from '../../core/version-source.js';
 import { loadPluginForValidation } from '../../core/plugins/loader.js';
 import { PluginConfigValidationError, validatePluginConfig } from '../../core/plugins/config-validation.js';
 import { runPluginHook } from '../../core/orchestration/phase-runner.js';
@@ -38,7 +39,7 @@ const sampleReleaseProfile = 'deploy-release';
 const sampleProviderPlugin = 'builtin:generic-env';
 const sampleProfilePlugin = 'builtin:deploy-release';
 const sampleTagTemplate = 'release-{version}';
-const sampleVersionSourceType = 'date-sha';
+const sampleVersionSourceType = versionSourceTypes.dateSha;
 const sampleNotesSourceType = 'static';
 const sampleWorkflowUrl = 'https://example.invalid/workflows/release';
 const sampleHookTimeoutMs = 5_000;

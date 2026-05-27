@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://release-framework.dev/examples/example-enricher/config.schema.json",
+  "$id": "https://relay.dev/examples/example-enricher/config.schema.json",
   "title": "Example Enricher Config",
   "type": "object",
   "properties": {

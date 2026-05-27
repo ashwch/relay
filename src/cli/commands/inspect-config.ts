@@ -1,4 +1,5 @@
 import { loadConfig } from '../../core/config/load-config.js';
+import { readVersionSourceStringOption, versionSourceUsesCounter } from '../../core/version-source.js';
 import {
   resolveArtifactPluginConfig,
   resolveArtifactPublishers,
@@ -11,7 +12,7 @@ import {
 import { validatePluginConfig } from '../../core/plugins/config-validation.js';
 import { loadPlugin } from '../../core/plugins/loader.js';
 import type { PluginManifest } from '../../core/plugins/manifest.js';
-import type { LoadedConfig, VersionSource } from '../../core/config/types.js';
+import type { LoadedConfig } from '../../core/config/types.js';
 
 export interface InspectConfigOptions {
   config: string;
@@ -93,7 +94,7 @@ export async function runInspectConfigCommand(options: InspectConfigOptions): Pr
 function inspectVersioning(loaded: LoadedConfig): VersioningInspection {
   const source = loaded.config.version_source;
   const usesCounter = versionSourceUsesCounter(source);
-  const counterSource = usesCounter ? readStringOption(source, 'counter_source') ?? 'github-tag' : null;
+  const counterSource = usesCounter ? readVersionSourceStringOption(source, 'counter_source') ?? 'github-tag' : null;
   return {
     source_type: source.type,
     tag_template: loaded.config.tag_template,
@@ -153,16 +154,4 @@ function buildPhasePlan(input: {
 
 function artifactHooks(manifest: PluginManifest): string[] {
   return manifest.hooks.filter((hook) => hook === 'publish' || hook === 'verify');
-}
-
-function versionSourceUsesCounter(source: VersionSource): boolean {
-  return source.type === 'date-counter'
-    || source.type === 'backend-date-release'
-    || source.type === 'date-release'
-    || (source.type === 'template' && readStringOption(source, 'template')?.includes('{counter}') === true);
-}
-
-function readStringOption(source: VersionSource, key: string): string | undefined {
-  const value = source[key];
-  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }

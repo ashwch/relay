@@ -52,6 +52,11 @@ describe('config loading', () => {
     expect(validateConfig(buildConfig({ version_source: { type: 'backend-date-release', counter_source: 'github-tag', separator: '.' } })).version_source.type).toBe('backend-date-release');
     expect(validateConfig(buildConfig({ version_source: { type: 'template', template: '{date}.{counter}-{short_sha}', counter_source: 'explicit', counter: 4 } })).version_source.type).toBe('template');
     expect(validateConfig(buildConfig({ version_source: { type: 'explicit', value: '2026.05.22.7' } })).version_source.type).toBe('explicit');
+    expect(validateConfig(buildConfig({ version_source: { type: 'package-json', path: 'package.json' } })).version_source.type).toBe('package-json');
+    expect(validateConfig(buildConfig({ version_source: { type: 'env', key: 'RELEASE_VERSION' } })).version_source.type).toBe('env');
+    expect(validateConfig(buildConfig({ version_source: { type: 'git-tag', pattern: '^v(?<version>.+)$' } })).version_source.type).toBe('git-tag');
+    expect(validateConfig(buildConfig({ version_source: { type: 'conventional-commits', tag_prefix: 'v', initial_version: '0.1.0', default_increment: 'patch' } })).version_source.type).toBe('conventional-commits');
+    expect(validateConfig(buildConfig({ version_source: { type: 'changesets', directory: '.changeset', package: '@example/component-library', tag_prefix: 'v', initial_version: '0.1.0' } })).version_source.type).toBe('changesets');
   });
 
   it('rejects counter-based versioning that hides the counter from tags', () => {
@@ -83,6 +88,65 @@ describe('config loading', () => {
         counter_source: 'explicit',
       },
       tag_template: 'release-{version}',
+    }))).toThrowError(ConfigValidationError);
+  });
+
+  it('rejects env version sources without a key', () => {
+    expect(() => validateConfig(buildConfig({
+      version_source: {
+        type: 'env',
+      },
+    }))).toThrowError(ConfigValidationError);
+  });
+
+  it('rejects invalid git-tag extraction regexes', () => {
+    expect(() => validateConfig(buildConfig({
+      version_source: {
+        type: 'git-tag',
+        pattern: '[',
+      },
+    }))).toThrowError(ConfigValidationError);
+
+    expect(() => validateConfig(buildConfig({
+      version_source: {
+        type: 'git-tag',
+        pattern: '^v.+$',
+      },
+    }))).toThrowError(ConfigValidationError);
+  });
+
+  it('rejects dynamic semver sources whose tags do not expose the version', () => {
+    expect(() => validateConfig(buildConfig({
+      version_source: {
+        type: 'conventional-commits',
+        tag_prefix: 'v',
+      },
+      tag_template: 'stable-release',
+    }))).toThrowError(ConfigValidationError);
+  });
+
+  it('rejects invalid semver defaults for dynamic semver sources', () => {
+    expect(() => validateConfig(buildConfig({
+      version_source: {
+        type: 'conventional-commits',
+        initial_version: 'not-semver',
+      },
+    }))).toThrowError(ConfigValidationError);
+
+    expect(() => validateConfig(buildConfig({
+      version_source: {
+        type: 'changesets',
+        package: '@example/component-library',
+        default_increment: 'prerelease',
+      },
+    }))).toThrowError(ConfigValidationError);
+  });
+
+  it('rejects changesets sources without a package name', () => {
+    expect(() => validateConfig(buildConfig({
+      version_source: {
+        type: 'changesets',
+      },
     }))).toThrowError(ConfigValidationError);
   });
 
