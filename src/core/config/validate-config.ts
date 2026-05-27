@@ -5,7 +5,7 @@ import parseSemver from 'semver/functions/parse.js';
 import { readJsonObjectFile } from '../io/files.js';
 import {
   dynamicSemverVersionSourceTypes,
-  fileVersionSourceFormats,
+  isFileVersionSourceFormat,
   versionSourceUsesCounter,
   versionSourceTypes,
 } from '../version-source.js';
@@ -124,9 +124,7 @@ function readFriendlyVersionSourceSchemaErrors(candidate: unknown): string[] | u
   // The schema answers "is this shape allowed?".
   // These messages answer "what should I change right now?".
   const errors: string[] = [];
-  if (source.format !== fileVersionSourceFormats.json
-    && source.format !== fileVersionSourceFormats.yaml
-    && source.format !== fileVersionSourceFormats.toml) {
+  if (typeof source.format !== 'string' || !isFileVersionSourceFormat(source.format)) {
     errors.push('/version_source/format file version sources require version_source.format to be one of: json, yaml, toml');
   }
   if (!isNonEmptyString(source.path)) {

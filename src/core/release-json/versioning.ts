@@ -15,6 +15,7 @@ import {
   counterBasedVersionSourceTypes,
   dateReleaseSourceTypes,
   fileVersionSourceFormats,
+  isFileVersionSourceFormat,
   readVersionSourceBooleanOption,
   readVersionSourceNumberOption,
   readVersionSourceStringArrayOption,
@@ -22,6 +23,7 @@ import {
   templateUsesCounter,
   versionSourceTypes,
 } from '../version-source.js';
+import type { FileVersionSourceFormat } from '../version-source.js';
 import type { NormalizedRelease, TemplateValues } from './schema.js';
 import { applyTagTemplate } from './schema.js';
 import type { EnvMap } from '../types/runtime.js';
@@ -257,11 +259,14 @@ async function resolveVersionFromSource(
 // reads one string from one structured file and does not try to evaluate
 // dynamic Python versioning, Cargo workspace inheritance, or Go module rules.
 function resolveFileVersion(source: VersionSource, workspaceRoot: string): string {
-  const format = readVersionSourceStringOption(source, 'format');
+  const configuredFormat = readVersionSourceStringOption(source, 'format');
   const configuredPath = readVersionSourceStringOption(source, 'path');
   const keyPath = readVersionSourceStringArrayOption(source, 'key_path');
-  if (!format || !configuredPath || !keyPath || keyPath.length === 0) {
+  if (!configuredFormat || !configuredPath || !keyPath || keyPath.length === 0) {
     throw new Error('version_source.type=file requires version_source.format, version_source.path, and version_source.key_path');
+  }
+  if (!isFileVersionSourceFormat(configuredFormat)) {
+    throw new Error(`version_source.type=file does not support format ${configuredFormat}`);
   }
 
   // Visual flow:
@@ -277,7 +282,7 @@ function resolveFileVersion(source: VersionSource, workspaceRoot: string): strin
   //   require one non-empty string
   const filePath = path.resolve(workspaceRoot, configuredPath);
   const raw = readStructuredVersionFile(filePath);
-  const parsed = parseStructuredVersionFile(raw, format, filePath);
+  const parsed = parseStructuredVersionFile(raw, configuredFormat, filePath);
   const value = readStructuredFileValue(parsed, keyPath);
   const renderedKeyPath = keyPath.join('.');
 
@@ -314,23 +319,23 @@ function readStructuredVersionFile(filePath: string): string {
 //   json -> JSON.parse
 //   yaml -> YAML.parse
 //   toml -> smol-toml
-function parseStructuredVersionFile(raw: string, format: string, filePath: string): unknown {
+function parseStructuredVersionFile(raw: string, format: FileVersionSourceFormat, filePath: string): unknown {
   try {
-    if (format === fileVersionSourceFormats.json) {
-      return JSON.parse(raw) as unknown;
-    }
-    if (format === fileVersionSourceFormats.yaml) {
-      return YAML.parse(raw) as unknown;
-    }
-    if (format === fileVersionSourceFormats.toml) {
-      return parseToml(raw) as unknown;
+    switch (format) {
+      case fileVersionSourceFormats.json:
+        return JSON.parse(raw) as unknown;
+      case fileVersionSourceFormats.yaml:
+        return YAML.parse(raw) as unknown;
+      case fileVersionSourceFormats.toml:
+        return parseToml(raw) as unknown;
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`version_source.type=file failed to parse ${format} file ${filePath}: ${message}`);
   }
 
-  throw new Error(`version_source.type=file does not support format ${format}`);
+  const unexpectedFormat: never = format;
+  return unexpectedFormat;
 }
 
 // Walk one segment at a time instead of supporting a mini query language.

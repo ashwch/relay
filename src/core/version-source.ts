@@ -47,6 +47,8 @@ export const fileVersionSourceFormats = {
 export type VersionSourceType = typeof versionSourceTypes[keyof typeof versionSourceTypes];
 export type FileVersionSourceFormat = typeof fileVersionSourceFormats[keyof typeof fileVersionSourceFormats];
 
+const fileVersionSourceFormatValues: ReadonlySet<string> = new Set(Object.values(fileVersionSourceFormats));
+
 interface VersionSourceLike {
   type: string;
   [key: string]: unknown;
@@ -94,6 +96,10 @@ export function readVersionSourceStringArrayOption(source: VersionSourceLike, ke
   return Array.isArray(value) && value.every((entry) => typeof entry === 'string' && entry.length > 0)
     ? value
     : undefined;
+}
+
+export function isFileVersionSourceFormat(value: string): value is FileVersionSourceFormat {
+  return fileVersionSourceFormatValues.has(value);
 }
 
 export function versionSourceUsesCounter(source: VersionSourceLike): boolean {

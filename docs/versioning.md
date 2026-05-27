@@ -231,9 +231,9 @@ version_source:
 Example outputs:
 
 ```text
-2.3.4
-5.6.7
-0.8.1
+package.json        -> 2.3.4
+.release-version.yml -> 5.6.7
+pyproject.toml      -> 0.8.1
 ```
 
 Use when a repo already stores a static version in a structured file and Relay

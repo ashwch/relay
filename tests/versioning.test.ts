@@ -106,7 +106,7 @@ describe('versioning flexibility', () => {
   it('supports reading nested JSON file versions', async () => {
     const release = await normalizeWithFixture(writeTempFileVersionConfig({
       format: 'json',
-      path: 'tests/fixtures/version-file-json/version.json',
+      path: fixtureRelativePath('version-file-json/version.json'),
       keyPath: ['release', 'version'],
     }));
     expect(release.release.version).toBe('5.6.7');
@@ -116,7 +116,7 @@ describe('versioning flexibility', () => {
   it('supports reading YAML file versions', async () => {
     const release = await normalizeWithFixture(writeTempFileVersionConfig({
       format: 'yaml',
-      path: 'tests/fixtures/version-file-yaml/release.yml',
+      path: fixtureRelativePath('version-file-yaml/release.yml'),
       keyPath: ['release', 'version'],
     }));
     expect(release.release.version).toBe('6.7.8');
@@ -126,7 +126,7 @@ describe('versioning flexibility', () => {
   it('supports reading TOML file versions', async () => {
     const release = await normalizeWithFixture(writeTempFileVersionConfig({
       format: 'toml',
-      path: 'tests/fixtures/version-file-toml/pyproject.toml',
+      path: fixtureRelativePath('version-file-toml/pyproject.toml'),
       keyPath: ['project', 'version'],
     }));
     expect(release.release.version).toBe('7.8.9');
@@ -136,7 +136,7 @@ describe('versioning flexibility', () => {
   it('fails clearly when a configured version file is missing', async () => {
     await expect(normalizeWithFixture(writeTempFileVersionConfig({
       format: 'json',
-      path: 'tests/fixtures/version-file-missing/version.json',
+      path: fixtureRelativePath('version-file-missing/version.json'),
       keyPath: ['release', 'version'],
     }))).rejects.toThrow('version_source.type=file could not find');
   });
@@ -144,7 +144,7 @@ describe('versioning flexibility', () => {
   it('fails clearly when a configured version file cannot be parsed', async () => {
     await expect(normalizeWithFixture(writeTempFileVersionConfig({
       format: 'json',
-      path: 'tests/fixtures/version-file-bad-parse/version.json',
+      path: fixtureRelativePath('version-file-bad-parse/version.json'),
       keyPath: ['release', 'version'],
     }))).rejects.toThrow('version_source.type=file failed to parse json file');
   });
@@ -152,7 +152,7 @@ describe('versioning flexibility', () => {
   it('fails clearly when key_path does not exist in the version file', async () => {
     await expect(normalizeWithFixture(writeTempFileVersionConfig({
       format: 'json',
-      path: 'tests/fixtures/version-file-json/version.json',
+      path: fixtureRelativePath('version-file-json/version.json'),
       keyPath: ['release', 'current'],
     }))).rejects.toThrow('version_source.type=file could not find key_path release.current');
   });
@@ -160,7 +160,7 @@ describe('versioning flexibility', () => {
   it('fails clearly when the configured file value is not a string', async () => {
     await expect(normalizeWithFixture(writeTempFileVersionConfig({
       format: 'yaml',
-      path: 'tests/fixtures/version-file-non-string/release.yml',
+      path: fixtureRelativePath('version-file-non-string/release.yml'),
       keyPath: ['release', 'version'],
     }))).rejects.toThrow('version_source.type=file requires');
   });
@@ -346,6 +346,10 @@ function fixturePath(fileName: string): string {
   return path.resolve(import.meta.dirname, 'fixtures', fileName);
 }
 
+function fixtureRelativePath(fileName: string): string {
+  return path.relative(fixtureWorkspaceRoot, fixturePath(fileName));
+}
+
 // Build one tiny relay.yml file per test case.
 //
 // Visual model:
@@ -359,8 +363,8 @@ function writeTempFileVersionConfig(source: FileVersionSourceFixture): string {
   tempDirs.push(configRoot);
   const configPath = path.join(configRoot, 'relay.yml');
   const keyPathBlock = source.keyPath.map((segment) => `    - ${segment}`).join('\n');
-  const config = `api_version: 1\nproduct_name: Example Service\nrelease_profile: deploy-release\nrelease_mode: framework-managed\nprovider_plugin: builtin:generic-env\nprofile_plugin: builtin:deploy-release\ntool_plugin: null\nartifact_publishers: []\nnotifiers: []\nmetadata_enrichers: []\nplugin_allowlist: []\nallow_local_plugins: false\nstable_branches:\n  - main\nversion_source:\n  type: file\n  format: ${source.format}\n  path: ${source.path}\n  key_path:\n${keyPathBlock}\ntag_template: v{version}\nnotes_source:\n  type: static\nplugin_config: {}\n`;
-  fs.writeFileSync(configPath, config);
+  const versionSourceBlock = `version_source:\n  type: file\n  format: ${source.format}\n  path: ${source.path}\n  key_path:\n${keyPathBlock}\ntag_template: v{version}`;
+  fs.writeFileSync(configPath, buildRelayConfig(versionSourceBlock));
   return configPath;
 }
 
@@ -375,8 +379,11 @@ function createTempGitRepo(): string {
 }
 
 function writeRelayConfig(repoRoot: string, versionSourceBlock: string): void {
-  const config = `api_version: 1\nproduct_name: Example Service\nrelease_profile: deploy-release\nrelease_mode: framework-managed\nprovider_plugin: builtin:generic-env\nprofile_plugin: builtin:deploy-release\ntool_plugin: null\nartifact_publishers: []\nnotifiers: []\nmetadata_enrichers: []\nplugin_allowlist: []\nallow_local_plugins: false\nstable_branches: [main]\n${versionSourceBlock}\nnotes_source:\n  type: static\nplugin_config: {}\n`;
-  fs.writeFileSync(path.join(repoRoot, '.github/relay.yml'), config);
+  fs.writeFileSync(path.join(repoRoot, '.github/relay.yml'), buildRelayConfig(versionSourceBlock));
+}
+
+function buildRelayConfig(versionSourceBlock: string): string {
+  return `api_version: 1\nproduct_name: Example Service\nrelease_profile: deploy-release\nrelease_mode: framework-managed\nprovider_plugin: builtin:generic-env\nprofile_plugin: builtin:deploy-release\ntool_plugin: null\nartifact_publishers: []\nnotifiers: []\nmetadata_enrichers: []\nplugin_allowlist: []\nallow_local_plugins: false\nstable_branches:\n  - main\n${versionSourceBlock}\nnotes_source:\n  type: static\nplugin_config: {}\n`;
 }
 
 function commitFile(repoRoot: string, filePath: string, content: string, message: string): string {
