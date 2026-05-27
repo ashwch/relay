@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -214,6 +215,25 @@ function assertContainedPath(pluginRoot: string, candidatePath: string, manifest
   const relativePath = path.relative(pluginRoot, candidatePath);
   if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
     throw new ExternalPluginExecutionError(`plugin ${manifest.name} handler must stay inside plugin root`);
+  }
+
+  // Lexical containment alone is not enough here.
+  // Visual model:
+  //
+  //   plugin root says:    plugins/my-plugin/index.mjs
+  //   filesystem says:     index.mjs is a symlink
+  //   symlink target says: ../../other-project/run-me.mjs
+  //
+  // From a path-string point of view that can look safe, while from a real
+  // filesystem point of view it escapes the allowlisted plugin root. So we
+  // verify the real target too before launching the subprocess.
+  if (fs.existsSync(candidatePath)) {
+    const realPluginRoot = fs.realpathSync(pluginRoot);
+    const realCandidatePath = fs.realpathSync(candidatePath);
+    const realRelativePath = path.relative(realPluginRoot, realCandidatePath);
+    if (realRelativePath.startsWith('..') || path.isAbsolute(realRelativePath)) {
+      throw new ExternalPluginExecutionError(`plugin ${manifest.name} handler must stay inside plugin root`);
+    }
   }
 }
 

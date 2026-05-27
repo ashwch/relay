@@ -10,6 +10,7 @@ import { validatePluginConfig, PluginConfigValidationError } from '../src/core/p
 import { loadPlugin } from '../src/core/plugins/loader.js';
 import type { PluginManifest } from '../src/core/plugins/manifest.js';
 import { PluginResponseValidationError } from '../src/core/plugins/response-validation.js';
+import { ExternalPluginExecutionError } from '../src/core/plugins/subprocess-runner.js';
 import type { StringMap } from '../src/core/types/runtime.js';
 import { createBaseReleaseDocument } from '../src/plugins/builtin/providers/shared.js';
 
@@ -38,6 +39,8 @@ const blockedPluginRef = 'path:./plugin-blocked';
 const badShapePluginRef = 'path:./plugin-bad-shape';
 const invalidConfigPluginRef = 'path:./plugin-invalid-config';
 const escapedSchemaPluginRef = 'path:./plugin-escaped-schema';
+const symlinkedSchemaPluginRef = 'path:./plugin-symlinked-schema';
+const symlinkedHandlerPluginRef = 'path:./plugin-symlinked-handler';
 
 describe('external plugin subprocess runtime', () => {
   afterEach(() => {
@@ -195,6 +198,46 @@ process.stdout.write(JSON.stringify({ status: 'ok', release_patch: {}, outputs: 
 
     const plugin = loadPlugin(loaded, escapedSchemaPluginRef, 'metadata_enricher');
     expect(() => validatePluginConfig(plugin, {})).toThrowError('config_schema must stay inside plugin root');
+  });
+
+  it('rejects symlinked config schemas that escape the plugin root', () => {
+    const loaded = createLoadedConfig(symlinkedSchemaPluginRef);
+    writePlugin(
+      loaded.dir,
+      'plugin-symlinked-schema',
+      createManifest('test:symlinked-schema-plugin', 'metadata_enricher', ['enrich'], 'config.schema.json'),
+      `
+process.stdout.write(JSON.stringify({ status: 'ok', release_patch: {}, outputs: {}, logs: [] }));
+`,
+    );
+
+    const outsideSchemaPath = path.join(loaded.dir, 'outside.schema.json');
+    fs.writeFileSync(outsideSchemaPath, JSON.stringify({ type: 'object' }, null, 2), 'utf8');
+    fs.rmSync(path.join(loaded.dir, 'plugin-symlinked-schema', 'config.schema.json'), { force: true });
+    fs.symlinkSync(outsideSchemaPath, path.join(loaded.dir, 'plugin-symlinked-schema', 'config.schema.json'));
+
+    const plugin = loadPlugin(loaded, symlinkedSchemaPluginRef, 'metadata_enricher');
+    expect(() => validatePluginConfig(plugin, {})).toThrowError('config_schema must stay inside plugin root');
+  });
+
+  it('rejects symlinked handlers that escape the plugin root', async () => {
+    const loaded = createLoadedConfig(symlinkedHandlerPluginRef);
+    writePlugin(
+      loaded.dir,
+      'plugin-symlinked-handler',
+      createManifest('test:symlinked-handler-plugin', 'metadata_enricher', ['enrich']),
+      `
+process.stdout.write(JSON.stringify({ status: 'ok', release_patch: {}, outputs: {}, logs: [] }));
+`,
+    );
+
+    const outsideHandlerPath = path.join(loaded.dir, 'outside-handler.mjs');
+    fs.writeFileSync(outsideHandlerPath, 'process.stdout.write(JSON.stringify({ status: "ok", release_patch: {}, outputs: {}, logs: [] }));\n', 'utf8');
+    fs.rmSync(path.join(loaded.dir, 'plugin-symlinked-handler', 'index.mjs'), { force: true });
+    fs.symlinkSync(outsideHandlerPath, path.join(loaded.dir, 'plugin-symlinked-handler', 'index.mjs'));
+
+    await expect(runExternalEnrichHook(loaded, symlinkedHandlerPluginRef)).rejects.toThrowError(ExternalPluginExecutionError);
+    await expect(runExternalEnrichHook(loaded, symlinkedHandlerPluginRef)).rejects.toThrowError('handler must stay inside plugin root');
   });
 });
 

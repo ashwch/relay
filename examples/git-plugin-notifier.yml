@@ -1,0 +1,68 @@
+# Example: load an external notifier plugin directly from a Git repository.
+#
+# Use this when the plugin source lives in a normal Git repo and you want
+# relay.yml to describe both:
+#
+#   1. which plugin should run
+#   2. where Relay should load it from
+#
+# Visual model:
+#
+#   relay.yml
+#     ↓
+#   git:github.com/acme/relay-plugins//slack-notify@main
+#     ↓
+#   Relay clones/fetches that repo into its git plugin cache
+#     ↓
+#   Relay resolves plugin-manifest.json inside //slack-notify
+#     ↓
+#   normal notifier loading + execution continues
+#
+# Why this is useful:
+# before git: support, CI often needed a manual `git clone ...` step before
+# Relay could even see the plugin. Now the plugin source can stay explicit in
+# one place: the Relay config itself.
+#
+# Important: this file uses placeholder repo names. Replace the `git:` ref with
+# a real repository before running inspect-config, validate-plugin, or finalize.
+api_version: 1
+product_name: Example Service
+release_profile: deploy-release
+release_mode: framework-managed
+provider_plugin: builtin:github-actions
+profile_plugin: builtin:deploy-release
+tool_plugin: null
+
+artifact_publishers: []
+
+notifiers:
+  - plugin: git:github.com/acme/relay-plugins//slack-notify@main
+
+metadata_enrichers:
+  - plugin: builtin:github-associated-prs
+
+# External plugin refs must still be allowlisted explicitly.
+plugin_allowlist:
+  - git:github.com/acme/relay-plugins//slack-notify@main
+
+# This stays false because git: plugins are not local path: plugins.
+allow_local_plugins: false
+stable_branches:
+  - main
+
+version_source:
+  type: backend-date-release
+  counter_source: github-tag
+  separator: .
+
+tag_template: release-{version}
+
+notes_source:
+  type: associated-release-pr
+
+# Plugin-specific config would go here under the exact same full git: ref.
+# Example:
+# plugin_config:
+#   git:github.com/acme/relay-plugins//slack-notify@main:
+#     channel: releases
+plugin_config: {}

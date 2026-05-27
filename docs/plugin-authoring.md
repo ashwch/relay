@@ -484,6 +484,17 @@ plugin_allowlist:
   - path:./plugins/example-enricher
 ```
 
+The same plugin could also be referenced from a Git repo when you want config
+consumers to load it directly without a separate CI clone step:
+
+```yaml
+metadata_enrichers:
+  - plugin: git:github.com/acme/relay-plugins//example-enricher@main
+
+plugin_allowlist:
+  - git:github.com/acme/relay-plugins//example-enricher@main
+```
+
 Important path rule:
 
 ```text
@@ -675,7 +686,7 @@ That gives you a known-good request builder instead of hand-crafting stdin.
 ### The plugin does not load
 Check:
 
-- plugin ref starts with `path:` or `npm:`
+- plugin ref starts with `path:`, `npm:`, or `git:`
 - plugin ref is in `plugin_allowlist`
 - `plugin-manifest.json` exists
 - manifest `type` matches the place you configured it
@@ -686,6 +697,7 @@ Check:
 - manifest `hooks` includes the hook core is trying to call
 - external plugin `entrypoint.handler` exists
 - handler stays inside the plugin root
+- if the handler path is a symlink, its real target still stays inside the plugin root
 
 ### The plugin runs but fails validation
 Check:
@@ -696,12 +708,22 @@ Check:
 - response is small enough
 - no `NaN`, functions, symbols, or circular references
 - the plugin returned one JSON object, not extra banner text mixed into stdout
+- if `config_schema` is a symlink, its real target still stays inside the plugin root
 
 Best first command:
 
 ```bash
 relay validate-plugin path:./plugins/example-enricher
 ```
+
+For `git:` refs, remember this nuance:
+
+```text
+--no-exec skips hook execution
+it does not skip git clone/fetch
+```
+
+Relay still has to load the plugin manifest before it can validate the plugin.
 
 Helpful rule of thumb:
 

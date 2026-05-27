@@ -268,9 +268,10 @@ read:
 Plugin refs are intentionally explicit:
 
 ```text
-builtin:...
-npm:...
-path:...
+builtin:... -> code ships inside Relay
+npm:...     -> code comes from an installed package
+git:...     -> code comes from a Git repo checkout cached by Relay
+path:...    -> code comes from a local directory
 ```
 
 Why be strict?
@@ -278,6 +279,18 @@ Why be strict?
 Because implicit discovery is confusing and unsafe.
 
 We do **not** want the framework to silently load arbitrary code just because it happens to exist somewhere in the workspace.
+
+Why `git:` was added:
+
+```text
+some teams want plugin source to live in Git
+without publishing npm packages
+and without teaching every CI workflow to clone the plugin repo manually
+```
+
+Useful next read:
+
+- `docs/git-plugin-refs.md`
 
 ## What a manifest is for
 

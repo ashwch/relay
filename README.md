@@ -159,10 +159,70 @@ jobs:
 
 Relay supports built-in plugins and external plugins.
 
-External plugins can be loaded through `path:` or `npm:` references and are executed through a small JSON contract over stdin/stdout. Use the plugin SDK for JavaScript/TypeScript plugins:
+External plugin refs are intentionally explicit:
+
+```text
+builtin:... -> code ships inside Relay
+npm:...     -> code comes from an installed package
+git:...     -> code comes from a Git repo checkout cached by Relay
+path:...    -> code comes from a local directory relative to relay.yml
+```
+
+Why add `git:` support?
+
+```text
+before:
+  CI had to clone a plugin repo manually
+  then install that plugin manually
+  then point Relay at a local path
+
+after:
+  relay.yml can point at the plugin repo directly
+```
+
+Example:
+
+```yaml
+plugin_allowlist:
+  - git:github.com/acme/relay-plugins//slack-notify@main
+
+notifiers:
+  - plugin: git:github.com/acme/relay-plugins//slack-notify@main
+```
+
+If the plugin needs plugin-local config, key it by the exact same full ref:
+
+```yaml
+plugin_config:
+  git:github.com/acme/relay-plugins//slack-notify@main:
+    channel: releases
+```
+
+Ref format:
+
+```text
+git:<host>/<owner>/<repo>//<optional/subdir>@<optional-ref>
+```
+
+Examples:
+
+```text
+git:github.com/acme/relay-plugins//slack-notify@main
+git:github.com/acme/relay-plugins//slack-notify@v1.2.3
+git:github.com/acme/relay-plugins//slack-notify@9f3c1d2
+git:github.com/acme/relay-plugins
+```
+
+These are placeholder refs for documentation. Replace `acme/relay-plugins`
+with a real reachable repository before running Relay against them.
+
+External plugins are still executed through the same small JSON contract over
+stdin/stdout after Relay resolves them to a plugin root. Use the plugin SDK for
+JavaScript/TypeScript plugins:
 
 - package export: `@ashwch/relay/plugin-sdk`
 - authoring guide: [`docs/plugin-authoring.md`](docs/plugin-authoring.md)
+- git ref guide: [`docs/git-plugin-refs.md`](docs/git-plugin-refs.md)
 - examples: [`examples/plugins/`](examples/plugins/)
 
 ## Repository layout
@@ -192,6 +252,7 @@ For full details, see [`docs/versioning.md`](docs/versioning.md).
 - [Plugins overview](docs/plugins.md)
 - [Plugin authoring](docs/plugin-authoring.md)
 - [Finalize phases and notifications](docs/finalize-phases-and-notifications.md)
+- [Git plugin refs](docs/git-plugin-refs.md)
 - [Release records](docs/release-records.md)
 - [Types](docs/types.md)
 - [Versioning](docs/versioning.md)

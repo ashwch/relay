@@ -18,7 +18,21 @@ const validate = ajv.compile<ReleaseConfig>(schema);
 const builtinSlackWebhookPlugin = 'builtin:slack-webhook';
 const builtinGitHubReleaseAssetsPlugin = 'builtin:github-release-assets';
 const builtinNpmRegistryVerifyPlugin = 'builtin:npm-registry-verify';
-const allowedPluginRefPrefixes = ['builtin:', 'npm:', 'path:'];
+
+// Plugin refs stay prefix-based on purpose.
+//
+// Visual model:
+//
+//   builtin:... -> checked into Relay itself
+//   npm:...     -> resolved from installed packages
+//   git:...     -> cloned/fetched into Relay's git plugin cache
+//   path:...    -> resolved from the local config directory
+//
+// Why validate this early?
+// Because a config typo such as `github.com/acme/plugin` is much easier to
+// explain at config-load time than later during plugin resolution.
+const allowedPluginRefPrefixes = ['builtin:', 'npm:', 'git:', 'path:'] as const;
+const allowedPluginRefPrefixList = allowedPluginRefPrefixes.join(', ');
 const supportedSemverIncrements = new Set(['major', 'minor', 'patch']);
 
 // This file performs two different kinds of checks:
@@ -171,7 +185,7 @@ function validatePluginRefs(config: ReleaseConfig): string[] {
 
   return pluginRefs.flatMap((pluginRef) => isExplicitPluginRef(pluginRef.value)
     ? []
-    : [`${pluginRef.path} plugin refs must start with builtin:, npm:, or path:`]);
+    : [`${pluginRef.path} plugin refs must start with ${allowedPluginRefPrefixList}`]);
 }
 
 function validateReleaseModeConfig(config: ReleaseConfig): string[] {

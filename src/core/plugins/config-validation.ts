@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { Ajv2020 } from 'ajv/dist/2020.js';
 import type { ValidateFunction } from 'ajv';
@@ -142,5 +143,29 @@ function resolvePluginSchemaPath(pluginRoot: string, schemaRef: string, manifest
       `config_schema=${schemaRef}`,
     ]);
   }
+
+  // Lexical containment is necessary but not sufficient.
+  // Visual model:
+  //
+  //   plugin root says:    plugins/my-plugin/config.schema.json
+  //   filesystem says:     that path is a symlink
+  //   symlink target says: ../../outside.schema.json
+  //
+  // The manifest should not be able to "look inside" the plugin root while
+  // actually validating against files outside the allowlisted trust boundary.
+  // So after the lexical check passes, we also verify the real filesystem
+  // target stays inside the real plugin root.
+  if (fs.existsSync(schemaPath)) {
+    const realPluginRoot = fs.realpathSync(pluginRoot);
+    const realSchemaPath = fs.realpathSync(schemaPath);
+    const realRelativePath = path.relative(realPluginRoot, realSchemaPath);
+    if (realRelativePath.startsWith('..') || path.isAbsolute(realRelativePath)) {
+      throw new PluginConfigValidationError(`plugin ${manifest.name} config_schema must stay inside plugin root`, [
+        `plugin_root=${pluginRoot}`,
+        `config_schema=${schemaRef}`,
+      ]);
+    }
+  }
+
   return schemaPath;
 }

@@ -94,6 +94,55 @@ plugin_config:
     include_rollout_prompt: true
 ```
 
+## External plugin refs and allowlists
+
+Relay keeps non-built-in plugin loading explicit.
+
+Visual model:
+
+```text
+plugin selection says what should run
+plugin_allowlist says which external refs are trusted to load
+```
+
+Supported explicit prefixes:
+
+```text
+npm:...  -> installed package
+git:...  -> cloned/fetched from a Git repo
+path:... -> local directory relative to relay.yml
+```
+
+Example `git:` config:
+
+```yaml
+plugin_allowlist:
+  - git:github.com/acme/relay-plugins//slack-notify@main
+
+notifiers:
+  - plugin: git:github.com/acme/relay-plugins//slack-notify@main
+
+plugin_config:
+  git:github.com/acme/relay-plugins//slack-notify@main:
+    channel: releases
+```
+
+Important rule:
+
+```text
+path: plugins are the only ones gated by allow_local_plugins in CI
+git: plugins still require allowlisting, but not allow_local_plugins=true
+```
+
+Why treat them differently?
+
+Because `path:` points at arbitrary local filesystem locations, while `git:`
+still describes one explicit repository source and optional pinned ref.
+
+If you want the focused syntax and cache behavior guide, read:
+
+- `docs/git-plugin-refs.md`
+
 ## Why some fields feel duplicated
 
 Example:

@@ -11,9 +11,11 @@ import { describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/core/config/load-config.js';
 import { resolveNotifierPluginConfig } from '../src/core/config/resolve-plugin-config.js';
 import { ConfigValidationError, validateConfig } from '../src/core/config/validate-config.js';
+import type { ReleaseConfig } from '../src/core/config/types.js';
 import { listBuiltinPlugins } from '../src/core/plugins/loader.js';
 
 const fixturePath = path.resolve(import.meta.dirname, 'fixtures/relay.yml');
+const gitPluginRef = 'git:github.com/ashwch/relay-plugins//monolith-notify@main';
 
 describe('config loading', () => {
   it('loads and validates the release config fixture', () => {
@@ -156,6 +158,13 @@ describe('config loading', () => {
     }))).toThrowError(ConfigValidationError);
   });
 
+  it('accepts git plugin refs in plugin config and allowlists', () => {
+    expect(validateConfig(buildConfig({
+      metadata_enrichers: [gitPluginRef],
+      plugin_allowlist: [gitPluginRef],
+    })).metadata_enrichers).toEqual([gitPluginRef]);
+  });
+
   it('rejects release modes with inconsistent tool plugin ownership', () => {
     expect(() => validateConfig(buildConfig({
       release_mode: 'tool-observe',
@@ -195,7 +204,7 @@ describe('config loading', () => {
   });
 });
 
-function buildConfig(overrides: Partial<ReturnType<typeof loadConfig>['config']>): ReturnType<typeof loadConfig>['config'] {
+function buildConfig(overrides: Partial<ReleaseConfig>): ReleaseConfig {
   return {
     api_version: 1,
     product_name: 'Example Service',
